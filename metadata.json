@@ -1,0 +1,5 @@
+{
+  "name": "Vermont School District Builder",
+  "description": "An interactive tool to create and visualize custom school district maps for Vermont. Assign towns to districts, view demographic data, and share or export your custom maps.",
+  "requestFramePermissions": []
+}
