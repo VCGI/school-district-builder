@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import pako from 'pako';
 import html2canvas from 'html2canvas';
+import 'leaflet/dist/leaflet.css';
 import {
   Tab, TownData, Assignments, SupervisoryUnions, TownGeoJSON, AllDistrictStats
 } from './types';
@@ -314,7 +315,7 @@ const App: React.FC = () => {
         showNotification('Failed to copy link.', true);
     });
     setExportShareModalOpen(false);
-  }, [generateShareableString]);
+  }, [generateShareableString, showNotification]);
 
   const exportAssignmentsToCsv = useCallback(() => {
     let csvContent = "TOWNNAME,COUNTY,DISTRICT_ID,PUBLIC_SCHOOL_STUDENTS,Public_Schools,Total_E_Ed_GL\r\n";
@@ -350,7 +351,7 @@ const App: React.FC = () => {
 
     showNotification('CSV download started.');
     setExportShareModalOpen(false);
-  }, [assignments, townData, mapName]);
+  }, [assignments, townData, mapName, showNotification]);
 
 
   const handleExportJpg = useCallback(async () => {
@@ -432,7 +433,7 @@ const App: React.FC = () => {
         printContainer.innerHTML = '';
         printContainer.classList.add('hidden');
       }
-  }, [assignments, townGeoJSON, mapName, currentNumDistricts, allDistrictStats]);
+  }, [assignments, townGeoJSON, mapName, currentNumDistricts, allDistrictStats, showNotification]);
   
   const handleFileImport = (file: File) => {
     if (!file || !file.type.match('text/csv')) {
