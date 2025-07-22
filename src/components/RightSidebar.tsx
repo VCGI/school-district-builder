@@ -1,5 +1,6 @@
+// src/components/RightSidebar.tsx
 import React from 'react';
-import { AllDistrictStats } from '../types';
+import { AllDistrictStats, DistrictNames } from '../types';
 import { districtColors, MAX_DISTRICTS } from '../constants';
 
 interface RightSidebarProps {
@@ -9,8 +10,10 @@ interface RightSidebarProps {
   currentNumDistricts: number;
   activeDistrict: number;
   allDistrictStats: AllDistrictStats;
+  districtNames: DistrictNames;
   onAddDistrict: () => void;
   onDistrictSelect: (id: number) => void;
+  onDistrictNameChange: (id: number, name: string) => void;
   onDistrictHover: (id: number | null) => void;
   onExportShare: () => void;
   onImport: () => void;
@@ -25,7 +28,8 @@ const EraserIcon: React.FC = () => (
 
 const RightSidebar: React.FC<RightSidebarProps> = ({
   mapName, onMapNameChange, onPresetChange, currentNumDistricts, activeDistrict, allDistrictStats,
-  onAddDistrict, onDistrictSelect, onDistrictHover, onExportShare, onImport, onReset
+  districtNames, onAddDistrict, onDistrictSelect, onDistrictNameChange, onDistrictHover,
+  onExportShare, onImport, onReset
 }) => {
 
   const districtArray = Array.from({ length: currentNumDistricts }, (_, i) => i + 1);
@@ -94,8 +98,17 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
                     <input type="radio" name="district" value={i} className="h-4 w-4 mr-3" checked={isActive} onChange={() => onDistrictSelect(i)} />
                     <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-baseline">
-                            <span className="font-semibold truncate" style={{color: districtColors[i-1]}}>District {i}</span>
-                            <span className="text-xs font-bold text-gray-600">{stats.studentTotal.toLocaleString()} students</span>
+                            <input
+                              type="text"
+                              value={districtNames[i] || `District ${i}`}
+                              onChange={(e) => onDistrictNameChange(i, e.target.value)}
+                              onClick={(e) => e.preventDefault()} // Prevent label click from toggling radio
+                              className="font-semibold truncate bg-transparent flex-1 min-w-0 p-0 focus:outline-none focus:bg-white focus:ring-1 focus:ring-blue-300 rounded"
+                              style={{color: districtColors[i-1]}}
+                            />
+                            <span className="text-xs font-bold text-gray-600 ml-2 flex-shrink-0 whitespace-nowrap">
+                                {stats.studentTotal.toLocaleString()} students
+                            </span>
                         </div>
                         <div className="flex justify-between items-baseline text-xs text-gray-500 mt-1">
                             <span>Public Schools: {stats.totalPublicSchools}</span>

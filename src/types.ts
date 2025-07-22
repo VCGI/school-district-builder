@@ -28,6 +28,10 @@ export interface Assignments {
   [townName: string]: number | null;
 }
 
+export interface DistrictNames {
+    [key: number]: string;
+}
+
 export interface SupervisoryUnion {
   towns: string[];
   totalStudents: number;
