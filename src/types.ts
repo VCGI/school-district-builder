@@ -42,6 +42,7 @@ export interface DistrictStats {
   studentTotal: number;
   totalGL: number;
   totalPublicSchools: number;
+  towns: string[];
 }
 
 export interface AllDistrictStats {

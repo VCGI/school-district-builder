@@ -78,7 +78,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
 
             {/* Districts */}
             {districtArray.map(i => {
-              const stats = allDistrictStats[i] || { townCount: 0, studentTotal: 0, totalGL: 0, totalPublicSchools: 0 };
+              const stats = allDistrictStats[i] || { townCount: 0, studentTotal: 0, totalGL: 0, totalPublicSchools: 0, towns: [] };
               const glPerStudent = stats.studentTotal > 0 ? stats.totalGL / stats.studentTotal : 0;
               const formattedGlPerStudent = `$${Math.floor(glPerStudent).toLocaleString('en-US')}`;
               const isActive = activeDistrict === i;
@@ -101,8 +101,13 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
                             <span>Public Schools: {stats.totalPublicSchools}</span>
                             <span className="truncate ml-2">GL/Student: {formattedGlPerStudent}</span>
                         </div>
-                        <div className="mt-1 flex items-center gap-2">
-                           <span className="text-xs text-gray-500">Towns: {stats.townCount}</span>
+                        <div className="mt-1 flex items-baseline gap-2">
+                           <span className="text-xs text-gray-500">Towns:</span>
+                           <div className="flex flex-wrap gap-1 items-center">
+                               {stats.towns.map(townId => (
+                                   <span key={townId} className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: districtColors[i - 1] }}></span>
+                               ))}
+                           </div>
                         </div>
                     </div>
                 </label>

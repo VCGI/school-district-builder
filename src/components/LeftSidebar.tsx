@@ -55,11 +55,17 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
               <li><strong>Share & Export:</strong> When your map is ready, use the 'Export & Share' button to get a unique link or download your work.</li>
             </ol>
             <div className="mt-6 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <h3 className="font-semibold text-sm text-yellow-800 mb-2">Beta Notice & Disclaimer</h3>
+              <h3 className="font-semibold text-sm text-yellow-800 mb-2">Notice & Disclaimer</h3>
               <ul className="list-disc list-inside text-xs text-yellow-700 space-y-1">
-                <li><strong>For Informational Use Only:</strong> This application is a work in progress.</li>
-                <li><strong>Data Accuracy:</strong> Information may contain errors or omissions and should not be considered official.</li>
-                <li><strong>Simplified Maps:</strong> To improve performance, features like town boundaries have been simplified.</li>
+                <li>
+                  <strong>Informational Use Only:</strong> This application is intended for general planning and references purposes, and to meet the requirements of <a href="https://legislature.vermont.gov/bill/status/2026/H.454" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">H.454 (Act 73) of 2025</a>.
+                </li>
+                <li>
+                  <strong>Data Accuracy:</strong> The information provided may contain errors or omissions and should not be considered definitive or official.
+                </li>
+                <li>
+                  <strong>Simplified Maps:</strong> To improve performance, features like town boundaries have been simplified and are not precise
+                </li>
               </ul>
             </div>
           </div>

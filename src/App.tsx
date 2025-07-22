@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import L from 'leaflet';
@@ -99,7 +98,7 @@ const App: React.FC = () => {
   const allDistrictStats = useMemo<AllDistrictStats>(() => {
       const stats: AllDistrictStats = {};
       for (let i = 1; i <= MAX_DISTRICTS; i++) {
-          stats[i] = { townCount: 0, studentTotal: 0, totalGL: 0, totalPublicSchools: 0 };
+          stats[i] = { townCount: 0, studentTotal: 0, totalGL: 0, totalPublicSchools: 0, towns: [] };
       }
       for (const townId in assignments) {
           const districtId = assignments[townId];
@@ -109,6 +108,7 @@ const App: React.FC = () => {
               stats[districtId].studentTotal += (townProps[PROPERTY_KEYS.STUDENT_COUNT] || 0);
               stats[districtId].totalGL += (townProps[PROPERTY_KEYS.GL] || 0);
               stats[districtId].totalPublicSchools += (townProps[PROPERTY_KEYS.SCHOOLS] || 0);
+              stats[districtId].towns.push(townId);
           }
       }
       return stats;
