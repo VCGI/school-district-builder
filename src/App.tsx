@@ -628,7 +628,7 @@ const App: React.FC = () => {
             >
               <div 
                 id="drop-zone"
-                className="w-3/4 h-3/4 max-w-4xl max-h-4xl rounded-lg flex items-center justify-center text-white text-2xl font-bold cursor-pointer border-4 border-dashed border-gray-400 bg-gray-700 hover:border-blue-500 hover:bg-gray-600 transition-colors"
+                className="w-3/4 h-3/4 max-w-4xl max-h-4xl rounded-lg flex flex-col items-center justify-center text-white text-2xl font-bold cursor-pointer border-4 border-dashed border-gray-400 bg-gray-700 hover:border-blue-500 hover:bg-gray-600 transition-colors p-8"
                 onClick={(e) => e.stopPropagation()}
                 onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-blue-500'); }}
                 onDragLeave={(e) => e.currentTarget.classList.remove('border-blue-500')}
@@ -651,6 +651,15 @@ const App: React.FC = () => {
                   accept=".csv"
                   onChange={(e) => e.target.files && handleFileImport(e.target.files[0])}
                 />
+                <div className="text-sm font-normal mt-6 text-gray-300 max-w-md text-left">
+                    <p className="mb-2">This tool is designed to import CSV files that were exported from the School District Builder. You can export district assignments by clicking the 'Export & Share' button, and selecting 'CSV Assignments'.</p>
+                    <p>The CSV must contain the following columns:</p>
+                    <ul className="list-disc list-inside mt-2">
+                        <li><strong>TOWNNAME</strong> (Required)</li>
+                        <li><strong>DISTRICT_ID</strong> (Required)</li>
+                        <li><strong>DISTRICT_NAME</strong> (Optional, but recommended)</li>
+                    </ul>
+                </div>
               </div>
             </div>
           )}
