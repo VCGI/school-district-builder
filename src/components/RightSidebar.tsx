@@ -39,9 +39,9 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
       <div className="flex-shrink-0">
         <div className="mb-2">
             <label htmlFor="map-name" className="block text-sm font-medium text-gray-700">Map Name</label>
-            <input 
-              type="text" id="map-name" 
-              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+            <input
+              type="text" id="map-name"
+              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               placeholder="Enter a name for your map..."
               value={mapName}
               onChange={(e) => onMapNameChange(e.target.value)}
@@ -49,8 +49,8 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
         </div>
          <div className="mb-4">
             <label htmlFor="preset-selector" className="block text-sm font-medium text-gray-700">Start with...</label>
-            <select 
-              id="preset-selector" 
+            <select
+              id="preset-selector"
               className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
               onChange={(e) => onPresetChange(e.target.value)}
             >
@@ -67,7 +67,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
           <h2 className="text-xl font-semibold mb-3">Districts</h2>
           <div id="district-selector-container" className="scrollable-list overflow-y-auto pr-2">
              {/* Eraser */}
-             <label 
+             <label
                 className={`flex items-center p-2 border rounded-lg cursor-pointer transition-colors mb-2 ${activeDistrict === 0 ? 'bg-gray-300' : 'bg-white'}`}
                 style={{borderColor: activeDistrict === 0 ? '#4a5568' : '#6b7280'}}
                 onMouseEnter={() => onDistrictHover(0)}
@@ -88,9 +88,9 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
               const isActive = activeDistrict === i;
               
               return (
-                <label 
+                <label
                   key={i}
-                  className={`flex items-center p-2 border rounded-lg cursor-pointer transition-colors mb-2 ${isActive ? 'bg-blue-50' : 'bg-white'}`} 
+                  className={`flex items-center p-2 border rounded-lg cursor-pointer transition-colors mb-2 ${isActive ? 'bg-blue-50' : 'bg-white'}`}
                   style={{borderColor: isActive ? districtColors[i-1] : `${districtColors[i-1]}80`}}
                   onMouseEnter={() => onDistrictHover(i)}
                   onMouseLeave={() => onDistrictHover(null)}
@@ -100,10 +100,11 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
                         <div className="flex justify-between items-baseline">
                             <input
                               type="text"
-                              value={districtNames[i] || `District ${i}`}
+                              value={districtNames[i] || ''}
+                              placeholder="Type District Name"
                               onChange={(e) => onDistrictNameChange(i, e.target.value)}
                               onClick={(e) => e.preventDefault()} // Prevent label click from toggling radio
-                              className="font-semibold truncate bg-transparent flex-1 min-w-0 p-0 focus:outline-none focus:bg-white focus:ring-1 focus:ring-blue-300 rounded"
+                              className="font-semibold truncate bg-transparent flex-1 min-w-0 p-0 focus:outline-none focus:bg-white focus:ring-1 focus:ring-blue-300 rounded placeholder-gray-200"
                               style={{color: districtColors[i-1]}}
                             />
                             <span className="text-xs font-bold text-gray-600 ml-2 flex-shrink-0 whitespace-nowrap">
@@ -130,10 +131,10 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
       </div>
 
       <div className="mt-auto flex-shrink-0 space-y-3">
-          <button 
+          <button
             onClick={onAddDistrict}
             disabled={currentNumDistricts >= MAX_DISTRICTS}
-            className="w-full text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed" 
+            className="w-full text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
             style={{backgroundColor: '#225d39'}}>
               Add District
           </button>

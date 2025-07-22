@@ -1,3 +1,5 @@
+// src/components/MapComponent.tsx
+
 import React, { useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import { TownGeoJSON, Assignments, TownFeature } from '../types';
@@ -111,12 +113,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
       }).addTo(mapRef.current);
 
-      if (onMapReady === undefined) { // Only fit bounds on the main map
+      if (onMapReady === undefined) { 
         const bounds = geoJsonLayerRef.current.getBounds();
         if (bounds.isValid()) {
-            // Defer fitting bounds until the next animation frame.
-            // This ensures the browser has calculated the final layout of the map container,
-            // especially in a responsive flexbox layout, preventing race conditions.
             requestAnimationFrame(() => {
                 if (mapRef.current) {
                     mapRef.current.invalidateSize();
@@ -126,7 +125,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
       }
     }
-  }, [townGeoJSON, getTownStyle, onTownClick, onMapReady]);
+  }, [townGeoJSON, onTownClick, onMapReady]); // Removed getTownStyle from dependencies
 
   return <div ref={mapContainerRef} id="map" className="h-full w-full bg-gray-200" />;
 };
