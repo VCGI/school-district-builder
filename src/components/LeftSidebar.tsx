@@ -33,7 +33,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
       </div>
       <div className="p-4 border-b flex-shrink-0">
         <h1 className="text-xl font-bold">School District Builder</h1>
-        <p className="text-xs text-gray-500 -mt-1">BETA v0.1.2</p>
+        <p className="text-xs text-gray-500 -mt-1">BETA v0.1.3</p>
       </div>
 
       <div className="flex border-b flex-shrink-0">
