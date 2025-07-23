@@ -55,6 +55,7 @@ const App: React.FC = () => {
   const [isExportShareModalOpen, setExportShareModalOpen] = useState<boolean>(false);
   const [isImportModalOpen, setImportModalOpen] = useState<boolean>(false);
   const [notification, setNotification] = useState<{ message: string; isError: boolean } | null>(null);
+  const [districtToDelete, setDistrictToDelete] = useState<number | null>(null);
 
   const modalRoot = document.getElementById('modal-root');
 
@@ -129,7 +130,7 @@ const App: React.FC = () => {
   const handleTownClick = useCallback((townId: string) => {
     setAssignments(prev => ({
       ...prev,
-      [townId]: activeDistrict === 0 ? null : (prev[townId] === activeDistrict ? null : activeDistrict)
+      [townId]: prev[townId] === activeDistrict ? null : activeDistrict
     }));
   }, [activeDistrict]);
 
@@ -141,7 +142,7 @@ const App: React.FC = () => {
       const newAssignments = { ...prev };
       const townsInSU = su.towns;
       const allAssigned = townsInSU.every(townId => newAssignments[townId] === activeDistrict);
-      const targetDistrict = activeDistrict === 0 ? null : (allAssigned ? null : activeDistrict);
+      const targetDistrict = allAssigned ? null : activeDistrict;
       townsInSU.forEach(townId => { newAssignments[townId] = targetDistrict; });
       return newAssignments;
     });
@@ -195,6 +196,46 @@ const App: React.FC = () => {
       return newAssignments;
     });
   }, [townData, resetApplication]);
+
+  const confirmDeleteDistrict = useCallback(() => {
+    if (districtToDelete === null) return;
+    
+    const idToDelete = districtToDelete;
+
+    // Shift assignments and names
+    setAssignments(prev => {
+        const newAssignments = { ...prev };
+        Object.keys(newAssignments).forEach(townId => {
+            if (newAssignments[townId] === idToDelete) {
+                newAssignments[townId] = null;
+            } else if (newAssignments[townId] && newAssignments[townId]! > idToDelete) {
+                newAssignments[townId]! -= 1;
+            }
+        });
+        return newAssignments;
+    });
+
+    setDistrictNames(prev => {
+        const newNames = { ...prev };
+        for (let i = idToDelete; i < currentNumDistricts; i++) {
+            newNames[i] = prev[i + 1];
+        }
+        newNames[currentNumDistricts] = `District ${currentNumDistricts}`; // Reset last
+        return newNames;
+    });
+    
+    // Adjust active district and total number of districts
+    if (activeDistrict === idToDelete || activeDistrict > currentNumDistricts - 1) {
+        setActiveDistrict(1);
+    } else if (activeDistrict > idToDelete) {
+        setActiveDistrict(prev => prev -1);
+    }
+    
+    setCurrentNumDistricts(prev => prev - 1);
+    setDistrictToDelete(null);
+    showNotification(`District ${idToDelete} was removed.`, false);
+
+  }, [districtToDelete, activeDistrict, currentNumDistricts]);
 
 
   // Notification handler
@@ -344,7 +385,7 @@ const App: React.FC = () => {
         showNotification('Failed to copy link.', true);
     });
     setExportShareModalOpen(false);
-  }, [generateShareableString, showNotification]);
+  }, [generateShareableString]);
 
   const exportAssignmentsToCsv = useCallback(() => {
     let csvContent = "TOWNNAME,COUNTY,DISTRICT_ID,DISTRICT_NAME,PUBLIC_SCHOOL_STUDENTS,Public_Schools,Total_E_Ed_GL\r\n";
@@ -382,7 +423,7 @@ const App: React.FC = () => {
 
     showNotification('CSV download started.');
     setExportShareModalOpen(false);
-  }, [assignments, townData, mapName, showNotification, districtNames]);
+  }, [assignments, townData, mapName, districtNames]);
 
 
   const handleExportJpg = useCallback(async () => {
@@ -465,7 +506,7 @@ const App: React.FC = () => {
         printContainer.innerHTML = '';
         printContainer.classList.add('hidden');
       }
-  }, [assignments, townGeoJSON, mapName, currentNumDistricts, allDistrictStats, showNotification, districtNames]);
+  }, [assignments, townGeoJSON, mapName, currentNumDistricts, allDistrictStats, districtNames]);
   
   const handleFileImport = (file: File) => {
     if (!file || !file.type.match('text/csv')) {
@@ -587,6 +628,7 @@ const App: React.FC = () => {
           onExportShare={() => setExportShareModalOpen(true)}
           onImport={() => setImportModalOpen(true)}
           onReset={resetApplication}
+          onDeleteDistrict={setDistrictToDelete}
         />
       </div>
 
@@ -600,6 +642,29 @@ const App: React.FC = () => {
               >
                   <p>{notification.message}</p>
               </div>
+          )}
+
+          {districtToDelete !== null && (
+            <div 
+              className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center" 
+              style={{ zIndex: 10002 }}
+              onClick={() => setDistrictToDelete(null)}
+            >
+              <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-lg font-bold mb-4">Confirm Delete</h3>
+                <p className="text-gray-700 mb-6">
+                  Are you sure you want to permanently remove <strong>{districtNames[districtToDelete] || `District ${districtToDelete}`}</strong>? This action cannot be undone.
+                </p>
+                <div className="flex justify-end space-x-4">
+                  <button onClick={() => setDistrictToDelete(null)} className="py-2 px-4 rounded bg-gray-200 hover:bg-gray-300">
+                    Cancel
+                  </button>
+                  <button onClick={confirmDeleteDistrict} className="py-2 px-4 rounded bg-red-600 hover:bg-red-700 text-white font-bold">
+                    Delete District
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {isExportShareModalOpen && (

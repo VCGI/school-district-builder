@@ -18,18 +18,20 @@ interface RightSidebarProps {
   onExportShare: () => void;
   onImport: () => void;
   onReset: () => void;
+  onDeleteDistrict: (id: number) => void;
 }
 
-const EraserIcon: React.FC = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-    <path d="M8.086 2.207a2 2 0 0 1 2.828 0l3.879 3.879a2 2 0 0 1 0 2.828l-5.5 5.5A2 2 0 0 1 7.879 15H5.12a2 2 0 0 1-1.414-.586l-2.5-2.5a2 2 0 0 1 0-2.828l6.879-6.879zm.66 11.34L3.453 8.254 1.914 9.793a1 1 0 0 0 0 1.414l2.5 2.5a1 1 0 0 0 .707.293H7.88a1 1 0 0 0 .707-.293l.16-.16z"/>
-  </svg>
+const TrashIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+        <path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+    </svg>
 );
 
 const RightSidebar: React.FC<RightSidebarProps> = ({
   mapName, onMapNameChange, onPresetChange, currentNumDistricts, activeDistrict, allDistrictStats,
   districtNames, onAddDistrict, onDistrictSelect, onDistrictNameChange, onDistrictHover,
-  onExportShare, onImport, onReset
+  onExportShare, onImport, onReset, onDeleteDistrict
 }) => {
 
   const districtArray = Array.from({ length: currentNumDistricts }, (_, i) => i + 1);
@@ -66,20 +68,6 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
       <div className="mb-4 flex-grow flex flex-col min-h-0">
           <h2 className="text-xl font-semibold mb-3">Districts</h2>
           <div id="district-selector-container" className="scrollable-list overflow-y-auto pr-2">
-             {/* Eraser */}
-             <label
-                className={`flex items-center p-2 border rounded-lg cursor-pointer transition-colors mb-2 ${activeDistrict === 0 ? 'bg-gray-300' : 'bg-white'}`}
-                style={{borderColor: activeDistrict === 0 ? '#4a5568' : '#6b7280'}}
-                onMouseEnter={() => onDistrictHover(0)}
-                onMouseLeave={() => onDistrictHover(null)}
-              >
-                  <input type="radio" name="district" value="0" className="h-4 w-4 mr-3" checked={activeDistrict === 0} onChange={() => onDistrictSelect(0)} />
-                  <div className="flex items-center text-gray-600">
-                      <EraserIcon/>
-                      <span className="font-semibold ml-2">Eraser</span>
-                  </div>
-              </label>
-
             {/* Districts */}
             {districtArray.map(i => {
               const stats = allDistrictStats[i] || { townCount: 0, studentTotal: 0, totalGL: 0, totalPublicSchools: 0, towns: [] };
@@ -90,7 +78,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
               return (
                 <label
                   key={i}
-                  className={`flex items-center p-2 border rounded-lg cursor-pointer transition-colors mb-2 ${isActive ? 'bg-blue-50' : 'bg-white'}`}
+                  className={`relative flex items-center p-2 border rounded-lg cursor-pointer transition-colors mb-2 ${isActive ? 'bg-blue-50' : 'bg-white'}`}
                   style={{borderColor: isActive ? districtColors[i-1] : `${districtColors[i-1]}80`}}
                   onMouseEnter={() => onDistrictHover(i)}
                   onMouseLeave={() => onDistrictHover(null)}
@@ -103,7 +91,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
                               value={districtNames[i] || ''}
                               placeholder="Type District Name"
                               onChange={(e) => onDistrictNameChange(i, e.target.value)}
-                              onClick={(e) => e.preventDefault()} // Prevent label click from toggling radio
+                              onClick={(e) => e.preventDefault()}
                               className="font-semibold truncate bg-transparent flex-1 min-w-0 p-0 focus:outline-none focus:bg-white focus:ring-1 focus:ring-blue-300 rounded placeholder-gray-200"
                               style={{color: districtColors[i-1]}}
                             />
@@ -124,6 +112,17 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
                            </div>
                         </div>
                     </div>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            onDeleteDistrict(i);
+                        }}
+                        className="absolute bottom-1 right-1 p-1 text-gray-400 hover:text-red-600 rounded-full hover:bg-red-100 transition-colors"
+                        title={`Remove ${districtNames[i] || `District ${i}`}`}
+                    >
+                        <TrashIcon />
+                    </button>
                 </label>
               )
             })}

@@ -1,3 +1,4 @@
+// src/components/LeftSidebar.tsx
 import React from 'react';
 import { Tab, SupervisoryUnions, Assignments } from '../types';
 import { districtColors } from '../constants';
@@ -50,7 +51,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
             <h3 className="font-semibold mb-2">How to Use:</h3>
             <ol className="list-decimal list-inside text-sm text-gray-600 space-y-2">
               <li><strong>Select a District:</strong> Choose an active district from the list on the right.</li>
-              <li><strong>Assign Towns:</strong> Click on towns on the map or entire Supervisory Unions from the list to assign them to your selected district. Click again to unassign.</li>
+              <li><strong>Assign Towns:</strong> Click on towns on the map or entire Supervisory Unions from the list to assign them to your selected district. <strong>Click again to unassign.</strong></li>
               <li><strong>Manage Districts:</strong> Use the controls on the right to add new districts, name your map, or start from a preset configuration.</li>
               <li><strong>Share & Export:</strong> When your map is ready, use the 'Export & Share' button to get a unique link or download your work.</li>
             </ol>
