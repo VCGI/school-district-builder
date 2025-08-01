@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>District Comparison Report</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React Libraries -->
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX compilation in the browser -->
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    
+    <!-- Recharts for charts -->
+    <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+
+    <style>
+        /* Simple body style for better font rendering */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900">
+    
+    <!-- The React application will be rendered inside this div -->
+    <div id="root"></div>
+
+    <!-- The React code with JSX, compiled by Babel -->
+    <script type="text/babel">
+    
+        // Destructure components from the global Recharts object provided by the CDN
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } = Recharts;
+
+        // --- Inline SVG Icons (to replace lucide-react dependency) ---
+        const ChevronDown = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 ml-1 inline-block"><path d="m6 9 6 6 6-6"/></svg>
+        );
+        const ChevronUp = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 ml-1 inline-block"><path d="m18 15-6-6-6 6"/></svg>
+        );
+
+        // --- Fallback/Sample Data ---
+        const sampleDistrictsData = [
+            {
+                "id": "dist_1", "name": "Windham Southeast SU", "color": "#3b82f6", "adm": 2525, "grandList": 5150117849, "homeEEdGL": 3932824951, "nonHomeEEdGL": 1217292898, "totalEEdGL": 5150117849,
+                "townsWithAdm": [ { "name": "BRATTLEBORO", "adm": 1496 }, { "name": "DUMMERSTON", "adm": 218 }, { "name": "GUILFORD", "adm": 253 }, { "name": "PUTNEY", "adm": 252 }, { "name": "VERNON", "adm": 306 } ],
+                "schools": [ { "id": "sch_0", "name": "ACADEMY SCHOOL", "type": "Elementary", "fciCategory": "10.01-30%", "enrollment": 363 }, { "id": "sch_1", "name": "BRATTLEBORO UHS #6", "type": "Secondary", "fciCategory": "10.01-30%", "enrollment": 797 } ]
+            },
+            {
+                "id": "dist_2", "name": "Maple Run USD", "color": "#10b981", "adm": 2456, "grandList": 2647868252, "homeEEdGL": 1374256483, "nonHomeEEdGL": 1273611769, "totalEEdGL": 2647868252,
+                "townsWithAdm": [ { "name": "SAINT ALBANS TOWN", "adm": 1056 }, { "name": "FAIRFIELD", "adm": 339 }, { "name": "SAINT ALBANS CITY", "adm": 1061 } ],
+                "schools": [ { "id": "sch_8", "name": "ST ALBANS CITY SCHOOL", "type": "Elementary", "fciCategory": "<10%", "enrollment": 643 }, { "id": "sch_11", "name": "BELLOWS FREE ACADEMY (ST ALBANS)", "type": "Secondary", "fciCategory": "10.01-30%", "enrollment": 977 } ]
+            }
+        ];
+        
+        // --- Data Loading ---
+        // Load data ONCE before the React app initializes. This is the most robust way.
+        const initialData = (() => {
+            try {
+                const dataString = sessionStorage.getItem('reportData');
+                if (dataString) {
+                    const jsonData = JSON.parse(dataString);
+                    if (Array.isArray(jsonData) && jsonData.length > 0) {
+                        return jsonData;
+                    }
+                }
+            } catch (error) {
+                console.error("Error parsing data from sessionStorage:", error);
+            }
+            // Fallback to sample data if no data is found or on error
+            return sampleDistrictsData;
+        })();
+
+
+        // --- Helper & Sub-Components ---
+
+        const CustomTooltip = ({ active, payload, label, formatter }) => {
+            if (active && payload && payload.length) {
+                return (
+                    <div className="p-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg">
+                        <p className="font-bold text-gray-800 dark:text-gray-100">{label}</p>
+                        {payload.map((pld, index) => (
+                            <p key={index} style={{ color: pld.color }} className="text-sm">
+                                {`${pld.name}: ${formatter ? formatter(pld.value) : pld.value}`}
+                            </p>
+                        ))}
+                    </div>
+                );
+            }
+            return null;
+        };
+
+        const DistrictProfileCard = ({ district }) => {
+            const [sortConfig, setSortConfig] = React.useState({ key: 'name', direction: 'ascending' });
+            const numberFormatter = (value) => value ? value.toLocaleString() : '0';
+            const currencyFormatter = (value) => `$${Math.round(value || 0).toLocaleString()}`;
+
+            const sortedSchools = React.useMemo(() => {
+                if (!district || !district.schools) return [];
+                let sortableItems = [...district.schools];
+                if (sortConfig !== null) {
+                    sortableItems.sort((a, b) => {
+                        const valA = a[sortConfig.key] || '';
+                        const valB = b[sortConfig.key] || '';
+                        if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+                        if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+                        return 0;
+                    });
+                }
+                return sortableItems;
+            }, [district, sortConfig]);
+
+            const requestSort = (key) => {
+                let direction = 'ascending';
+                if (sortConfig.key === key && sortConfig.direction === 'ascending') direction = 'descending';
+                setSortConfig({ key, direction });
+            };
+            
+            const getSortIcon = (key) => {
+                if (sortConfig.key !== key) return null;
+                if (sortConfig.direction === 'ascending') return <ChevronUp />;
+                return <ChevronDown />;
+            };
+
+            if (!district) return <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow">Please select a district to view its profile.</div>;
+
+            return (
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mt-6">
+                    <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{district.name}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4 mb-6 text-center">
+                        <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg"><p className="text-sm text-gray-600 dark:text-gray-400">Total ADM</p><p className="text-2xl font-semibold text-gray-900 dark:text-white">{numberFormatter(district.adm)}</p></div>
+                        <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg"><p className="text-sm text-gray-600 dark:text-gray-400">Total Grand List</p><p className="text-2xl font-semibold text-gray-900 dark:text-white">{currencyFormatter(district.grandList)}</p></div>
+                        <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg"><p className="text-sm text-gray-600 dark:text-gray-400">Grand List / Student</p><p className="text-2xl font-semibold text-gray-900 dark:text-white">{currencyFormatter(district.adm > 0 ? district.grandList / district.adm : 0)}</p></div>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div>
+                            <h4 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Towns Served</h4>
+                            <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+                                <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                                    <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400"><tr><th className="px-4 py-2">Town</th><th className="px-4 py-2 text-right">ADM</th></tr></thead>
+                                    <tbody>{district.townsWithAdm.map(town => (<tr key={town.name} className="border-t border-gray-200 dark:border-gray-700"><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{town.name}</td><td className="px-4 py-2 text-right">{numberFormatter(town.adm)}</td></tr>))}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Schools</h4>
+                            <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+                                <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                                    <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400"><tr><th className="px-4 py-2"><button onClick={() => requestSort('name')} className="flex items-center font-semibold">School Name {getSortIcon('name')}</button></th><th className="px-4 py-2"><button onClick={() => requestSort('type')} className="flex items-center font-semibold">Type {getSortIcon('type')}</button></th><th className="px-4 py-2 text-right"><button onClick={() => requestSort('fciCategory')} className="flex items-center font-semibold w-full justify-end">FCI Category {getSortIcon('fciCategory')}</button></th></tr></thead>
+                                    <tbody>{sortedSchools.map(school => (<tr key={school.id} className="border-t border-gray-200 dark:border-gray-700"><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{school.name}</td><td className="px-4 py-2">{school.type}</td><td className="px-4 py-2 text-right font-mono">{school.fciCategory || 'N/A'}</td></tr>))}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main Report Component ---
+        function App({ allDistrictsData }) {
+            // Clean up sessionStorage once the component has successfully mounted.
+            React.useEffect(() => {
+                sessionStorage.removeItem('reportData');
+            }, []); // Empty dependency array ensures this runs only once.
+
+            const [sortConfig, setSortConfig] = React.useState({ key: 'name', direction: 'ascending' });
+            const [selectedDistrictId, setSelectedDistrictId] = React.useState(
+                allDistrictsData && allDistrictsData.length > 0 ? allDistrictsData[0].id : null
+            );
+
+            const processedData = React.useMemo(() => {
+                if (!allDistrictsData) return [];
+                return allDistrictsData.map(d => ({
+                    ...d,
+                    grandListPerStudent: d.adm > 0 ? d.grandList / d.adm : 0,
+                    numSchools: d.schools ? d.schools.length : 0
+                }));
+            }, [allDistrictsData]);
+
+            const sortedTableData = React.useMemo(() => {
+                let sortableItems = [...processedData];
+                if (sortConfig !== null) {
+                    sortableItems.sort((a, b) => {
+                        const valA = a[sortConfig.key] || '';
+                        const valB = b[sortConfig.key] || '';
+                        if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+                        if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+                        return 0;
+                    });
+                }
+                return sortableItems;
+            }, [processedData, sortConfig]);
+            
+            const requestSort = (key) => {
+                let direction = 'ascending';
+                if (sortConfig.key === key && sortConfig.direction === 'ascending') direction = 'descending';
+                setSortConfig({ key, direction });
+            };
+
+            const getSortIcon = (key) => {
+                if (sortConfig.key !== key) return null;
+                if (sortConfig.direction === 'ascending') return <ChevronUp />;
+                return <ChevronDown />;
+            };
+            
+            const overviewTableHeaders = [
+                { key: 'name', label: 'District Name' }, { key: 'adm', label: 'ADM' },
+                { key: 'grandListPerStudent', label: 'Grand List / Student' }, { key: 'homeEEdGL', label: 'Home E. Ed. GL' },
+                { key: 'nonHomeEEdGL', label: 'Non-Home E. Ed. GL' }, { key: 'totalEEdGL', label: 'Total E. Ed. GL' },
+                { key: 'numSchools', label: '# of Schools' },
+            ];
+
+            const currencyFormatter = (value) => `$${Math.round(value || 0).toLocaleString()}`;
+            const numberFormatter = (value) => value ? value.toLocaleString() : '0';
+
+            if (!allDistrictsData || allDistrictsData.length === 0) {
+                return <div className="text-center p-8 text-red-500">No district data found or data is invalid. Please try generating the report again.</div>;
+            }
+
+            return (
+                <div className="bg-gray-50 dark:bg-gray-900 min-h-screen p-4 sm:p-6 lg:p-8 font-sans">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="mb-10"><h1 className="text-4xl font-bold text-gray-900 dark:text-white">Statewide District Report</h1><p className="mt-2 text-lg text-gray-600 dark:text-gray-400">An overview of key metrics and detailed profiles for all districts.</p></div>
+                        <div className="mb-12">
+                            <h2 className="text-3xl font-semibold text-gray-800 dark:text-gray-100 pb-1 border-b-2 border-indigo-500 mb-6">Overview</h2>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Average Daily Membership (ADM)</h3><ResponsiveContainer width="100%" height={300}><BarChart data={processedData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.2)" /><XAxis dataKey="name" tick={{ fill: '#6b7280' }} fontSize={12} interval={0} angle={-20} textAnchor="end" height={60} /><YAxis tick={{ fill: '#6b7280' }} tickFormatter={numberFormatter} /><Tooltip content={<CustomTooltip formatter={numberFormatter} />} cursor={{fill: 'rgba(239, 246, 255, 0.5)'}} /><Bar dataKey="adm" name="ADM" radius={[4, 4, 0, 0]}>{processedData.map((entry) => (<Cell key={`cell-${entry.id}`} fill={entry.color || '#8884d8'} />))}</Bar></BarChart></ResponsiveContainer></div>
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Grand List per Student</h3><ResponsiveContainer width="100%" height={300}><BarChart data={processedData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.2)" /><XAxis dataKey="name" tick={{ fill: '#6b7280' }} fontSize={12} interval={0} angle={-20} textAnchor="end" height={60} /><YAxis tick={{ fill: '#6b7280' }} tickFormatter={currencyFormatter} /><Tooltip content={<CustomTooltip formatter={currencyFormatter} />} cursor={{fill: 'rgba(239, 246, 255, 0.5)'}} /><Bar dataKey="grandListPerStudent" name="GL / Student" radius={[4, 4, 0, 0]}>{processedData.map((entry) => (<Cell key={`cell-${entry.id}`} fill={entry.color || '#82ca9d'} />))}</Bar></BarChart></ResponsiveContainer></div>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+                                <div className="p-6"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Comparative Data Table</h3><p className="text-sm text-gray-500 dark:text-gray-400">Click headers to sort.</p></div>
+                                <div className="overflow-x-auto"><table className="w-full text-sm text-left text-gray-500 dark:text-gray-400"><thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"><tr>{overviewTableHeaders.map((header) => (<th key={header.key} scope="col" className="px-6 py-3 whitespace-nowrap"><button onClick={() => requestSort(header.key)} className="flex items-center uppercase font-semibold">{header.label}{getSortIcon(header.key)}</button></th>))}</tr></thead><tbody>{sortedTableData.map((item) => (<tr key={item.id} className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"><td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{item.name}</td><td className="px-6 py-4">{numberFormatter(item.adm)}</td><td className="px-6 py-4">{currencyFormatter(item.grandListPerStudent)}</td><td className="px-6 py-4">{currencyFormatter(item.homeEEdGL)}</td><td className="px-6 py-4">{currencyFormatter(item.nonHomeEEdGL)}</td><td className="px-6 py-4">{currencyFormatter(item.totalEEdGL)}</td><td className="px-6 py-4 text-center">{item.numSchools}</td></tr>))}</tbody></table></div>
+                            </div>
+                        </div>
+                        <div>
+                            <h2 className="text-3xl font-semibold text-gray-800 dark:text-gray-100 pb-1 border-b-2 border-indigo-500 mb-6">District Profiles</h2>
+                            {selectedDistrictId && (
+                                <>
+                                    <div className="mb-4"><label htmlFor="district-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select a District to View Profile:</label><select id="district-select" value={selectedDistrictId} onChange={(e) => setSelectedDistrictId(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">{processedData.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
+                                    <DistrictProfileCard district={processedData.find(d => d.id === selectedDistrictId)} />
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Render the React application into the 'root' div, passing the pre-loaded data as a prop.
+        ReactDOM.render(<App allDistrictsData={initialData} />, document.getElementById('root'));
+
+    </script>
+
+</body>
+</html>

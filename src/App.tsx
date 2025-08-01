@@ -1,19 +1,48 @@
 // src/App.tsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import pako from 'pako';
 import html2canvas from 'html2canvas';
 import 'leaflet/dist/leaflet.css';
 import {
-  Tab, TownData, Assignments, SupervisoryUnions, TownGeoJSON, AllDistrictStats, DistrictNames
+  Tab, TownData, Assignments, SupervisoryUnions, TownGeoJSON, AllDistrictStats, DistrictNames, SchoolDetailsByTown
 } from './types';
 import {
-  GEOJSON_URL, PROPERTY_KEYS, MAX_DISTRICTS, INITIAL_DISTRICTS, districtColors, BASE62_CHARS
+  GEOJSON_URL, SCHOOLS_URL, PROPERTY_KEYS, MAX_DISTRICTS, INITIAL_DISTRICTS, districtColors, BASE62_CHARS
 } from './constants';
 import LeftSidebar from './components/LeftSidebar';
 import RightSidebar from './components/RightSidebar';
 import MapComponent from './components/MapComponent';
+import ReportComponent from './components/ReportComponent';
+import HelpModal from './components/HelpModal';
+import SplashScreen from './components/SplashScreen';
+import type { Map } from 'leaflet';
+
+// Define the ReportData type, as it's now used in this file
+interface ReportData {
+  id: string;
+  name: string;
+  color: string;
+  adm: number;
+  grandList: number;
+  homeEEdGL: number;
+  nonHomeEEdGL: number;
+  totalEEdGL: number;
+  townCount: number;
+  enrollCategory: { small: number; medium: number; large: number; };
+  independentEnrollCategory: { small: number; medium: number; large: number; };
+  independentSchoolCount: number;
+  pcbAboveSALCount: number;
+  fciCounts: { good: number; fair: number; poor: number; veryPoor: number; };
+  townsWithAdm: { name: string; adm: number; county: string; totalEEdGL: number; Home_E_Ed_GL: number; NonHome_E_Ed_GL: number; SqMi: number; }[];
+  publicSchools: any[];
+  independentSchools: any[];
+  suStatus: { intact: string[], broken: string[] };
+  rpcStatus: { intact: string[], broken: string[] };
+}
+
+const DISCLAIMER_VERSION = '1.0'; // Version for the disclaimer acknowledgment
 
 // Utility Functions for URL State
 const toBase62 = (num: number) => {
@@ -28,26 +57,29 @@ const fromBase62 = (str: string) => {
     return num;
 };
 
-const initializeDistrictNames = () => {
+const initializeDistrictNames = (order: number[], values?: (string | null)[]) => {
     const initialNames: DistrictNames = {};
-    for (let i = 1; i <= MAX_DISTRICTS; i++) {
-        initialNames[i] = `District ${i}`;
-    }
+    order.forEach((id, index) => {
+        initialNames[id] = values && values[index] ? values[index]! : `District ${id}`;
+    });
     return initialNames;
 };
 
 const App: React.FC = () => {
-  // Core State
+  const [currentView, setCurrentView] = useState<'map' | 'report'>('map');
+  const [reportData, setReportData] = useState<ReportData[]>([]);
+  const [unassignedTownsCount, setUnassignedTownsCount] = useState<number>(0);
+
   const [townData, setTownData] = useState<TownData>({});
   const [townGeoJSON, setTownGeoJSON] = useState<TownGeoJSON | null>(null);
   const [assignments, setAssignments] = useState<Assignments>({});
-  const [districtNames, setDistrictNames] = useState<DistrictNames>(initializeDistrictNames);
+  const [districtNames, setDistrictNames] = useState<DistrictNames>({});
   const [supervisoryUnions, setSupervisoryUnions] = useState<SupervisoryUnions>({});
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [schoolDetails, setSchoolDetails] = useState<SchoolDetailsByTown>({});
+  const [independentSchoolDetails, setIndependentSchoolDetails] = useState<SchoolDetailsByTown>({});
+  const [districtOrder, setDistrictOrder] = useState<number[]>(() => Array.from({ length: INITIAL_DISTRICTS }, (_, i) => i + 1));
 
-  // UI State
   const [activeDistrict, setActiveDistrict] = useState<number>(1);
-  const [currentNumDistricts, setCurrentNumDistricts] = useState<number>(INITIAL_DISTRICTS);
   const [mapName, setMapName] = useState<string>('');
   const [activeTab, setActiveTab] = useState<Tab>(Tab.About);
   const [hoveredDistrict, setHoveredDistrict] = useState<number | null>(null);
@@ -56,16 +88,38 @@ const App: React.FC = () => {
   const [isImportModalOpen, setImportModalOpen] = useState<boolean>(false);
   const [notification, setNotification] = useState<{ message: string; isError: boolean } | null>(null);
   const [districtToDelete, setDistrictToDelete] = useState<number | null>(null);
+  const [draggedDistrict, setDraggedDistrict] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [isLeftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
+  const [isHelpModalOpen, setHelpModalOpen] = useState<boolean>(false);
+  const [showSplashScreen, setShowSplashScreen] = useState<boolean>(
+    localStorage.getItem('disclaimerAcknowledged') !== DISCLAIMER_VERSION
+  );
+  const mapRef = useRef<Map | null>(null);
 
   const modalRoot = document.getElementById('modal-root');
 
-  // Initial Data Load & URL State Deserialization
   useEffect(() => {
-    const loadGeoJSON = async () => {
+    const timer = setTimeout(() => {
+      mapRef.current?.invalidateSize();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [isLeftSidebarCollapsed]);
+
+  useEffect(() => {
+    const loadAllData = async () => {
       try {
-        const response = await fetch(GEOJSON_URL);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const geojsonData: TownGeoJSON = await response.json();
+        const [geojsonResponse, schoolsResponse] = await Promise.all([
+            fetch(GEOJSON_URL),
+            fetch(SCHOOLS_URL)
+        ]);
+
+        if (!geojsonResponse.ok || !schoolsResponse.ok) {
+            throw new Error('Network response was not ok for one or more data files.');
+        }
+        
+        const geojsonData: TownGeoJSON = await geojsonResponse.json();
+        const schoolsData = await schoolsResponse.json();
         
         const newTownData: TownData = {};
         const newAssignments: Assignments = {};
@@ -89,30 +143,55 @@ const App: React.FC = () => {
         setTownData(newTownData);
         setSupervisoryUnions(newSUs);
         setTownGeoJSON(geojsonData);
+
+        const newSchoolDetails: SchoolDetailsByTown = {};
+        const newIndependentSchoolDetails: SchoolDetailsByTown = {};
+
+        schoolsData.features.forEach((schoolFeature: any) => {
+            const attrs = schoolFeature.properties;
+            const townName = attrs.town?.toUpperCase();
+
+            if (attrs.Status === 'OPEN' && townName) {
+                if (attrs.accessType === 'Public') {
+                    if (!newSchoolDetails[townName]) newSchoolDetails[townName] = [];
+                    newSchoolDetails[townName].push({
+                        NAME: attrs.School, Grades: attrs.Grades, ENROLLMENT: attrs.Enrollment,
+                        TOWN: attrs.town, Type: attrs.Type, yearBuilt: attrs.yearBuilt,
+                        fciCategory: attrs.fciCategory, enrollYear: attrs.enrollYear, PCB_Cat: attrs.PCB_Cat
+                    });
+                } else if (attrs.accessType === 'Independent') {
+                    if (!newIndependentSchoolDetails[townName]) newIndependentSchoolDetails[townName] = [];
+                    newIndependentSchoolDetails[townName].push({
+                        NAME: attrs.School, TOWN: attrs.town, Type: attrs.Type,
+                        Notes: attrs.Notes, Grades: attrs.Grades, ENROLLMENT: attrs.Enrollment || 0
+                    });
+                }
+            }
+        });
+        setSchoolDetails(newSchoolDetails);
+        setIndependentSchoolDetails(newIndependentSchoolDetails);
         
-        // Load state from URL after data is ready
         loadStateFromURL(newTownData, newAssignments);
 
       } catch (error) {
-        console.error('Error loading or processing GeoJSON:', error);
+        console.error('Error loading or processing application data:', error);
         showNotification('Failed to load map data. Please try again later.', true);
-      } finally {
-        setIsLoading(false);
       }
     };
-    loadGeoJSON();
+    
+    loadAllData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  // Memoized calculations
   const allDistrictStats = useMemo<AllDistrictStats>(() => {
       const stats: AllDistrictStats = {};
-      for (let i = 1; i <= MAX_DISTRICTS; i++) {
-          stats[i] = { townCount: 0, studentTotal: 0, totalGL: 0, totalPublicSchools: 0, towns: [] };
-      }
+      districtOrder.forEach(id => {
+        stats[id] = { townCount: 0, studentTotal: 0, totalGL: 0, totalPublicSchools: 0, towns: [] };
+      });
+
       for (const townId in assignments) {
           const districtId = assignments[townId];
-          if (districtId && townData[townId]) {
+          if (districtId && stats[districtId]) {
               const townProps = townData[townId];
               stats[districtId].townCount++;
               stats[districtId].studentTotal += (townProps[PROPERTY_KEYS.STUDENT_COUNT] || 0);
@@ -122,11 +201,17 @@ const App: React.FC = () => {
           }
       }
       return stats;
-  }, [assignments, townData]);
+  }, [assignments, townData, districtOrder]);
 
   const sortedSUs = useMemo(() => Object.keys(supervisoryUnions).sort(), [supervisoryUnions]);
 
-  // Handlers
+  const handleAcknowledgeSplash = (dontShowAgain: boolean) => {
+    if (dontShowAgain) {
+      localStorage.setItem('disclaimerAcknowledged', DISCLAIMER_VERSION);
+    }
+    setShowSplashScreen(false);
+  };
+  
   const handleTownClick = useCallback((townId: string) => {
     setAssignments(prev => ({
       ...prev,
@@ -149,10 +234,24 @@ const App: React.FC = () => {
   }, [activeDistrict, supervisoryUnions]);
 
   const addDistrict = useCallback(() => {
-    if (currentNumDistricts < MAX_DISTRICTS) {
-      setCurrentNumDistricts(prev => prev + 1);
+    if (districtOrder.length >= MAX_DISTRICTS) return;
+
+    let newDistrictId = 1;
+    const sortedOrder = [...districtOrder].sort((a,b)=>a-b);
+    for (const id of sortedOrder) {
+        if (id === newDistrictId) {
+            newDistrictId++;
+        } else {
+            break;
+        }
     }
-  }, [currentNumDistricts]);
+    
+    if (newDistrictId <= MAX_DISTRICTS) {
+        setDistrictOrder(prev => [...prev, newDistrictId]);
+        setDistrictNames(prev => ({...prev, [newDistrictId]: `District ${newDistrictId}`}));
+    }
+  }, [districtOrder]);
+
 
   const handleDistrictNameChange = (id: number, name: string) => {
     setDistrictNames(prev => ({ ...prev, [id]: name }));
@@ -164,10 +263,11 @@ const App: React.FC = () => {
       Object.keys(reset).forEach(key => { reset[key] = null; });
       return reset;
     });
-    setCurrentNumDistricts(INITIAL_DISTRICTS);
+    const initialOrder = Array.from({ length: INITIAL_DISTRICTS }, (_, i) => i + 1);
+    setDistrictOrder(initialOrder);
+    setDistrictNames(initializeDistrictNames(initialOrder));
     setActiveDistrict(1);
     setMapName('');
-    setDistrictNames(initializeDistrictNames());
     const url = new URL(window.location.toString());
     url.searchParams.delete('data');
     window.history.pushState({}, '', url);
@@ -183,18 +283,42 @@ const App: React.FC = () => {
       resetApplication();
       return;
     }
-    const uniqueValues = [...new Set(Object.values(townData).map(town => town[field]))].sort();
-    const valueToDistrictMap: { [key: string]: number } = {};
-    uniqueValues.forEach((value, index) => { valueToDistrictMap[value] = index + 1; });
+
+    const rpcMapping: { [key: string]: string } = {
+      "AC": "Addison County RPC", "BC": "Bennington County RC", "CV": "Central Vermont RPC",
+      "CC": "Chittenden County RPC", "NW": "Northwest RPC", "LC": "Lamoille County PC",
+      "NV": "Northeastern Vermont Dev. Assoc.", "RR": "Rutland RPC", "MA": "Mount Ascutney RC",
+      "TR": "Two Rivers-Ottauquechee RC", "WR": "Windham RC"
+    };
+
+    let uniqueValues = [...new Set(Object.values(townData).map(town => town[field]))].sort();
     
-    setCurrentNumDistricts(Math.min(uniqueValues.length, MAX_DISTRICTS));
+    if (field === 'RPC') {
+        uniqueValues = uniqueValues.map(val => rpcMapping[val] || val);
+    }
+    
+    const valueToDistrictIdMap: { [key: string]: number } = {};
+    const newOrder = uniqueValues.slice(0, MAX_DISTRICTS).map((_, index) => index + 1);
+    
+    uniqueValues.forEach((value, index) => {
+      if (index < MAX_DISTRICTS) {
+        valueToDistrictIdMap[value] = index + 1;
+      }
+    });
+
+    setDistrictOrder(newOrder);
     setAssignments(() => {
       const newAssignments: Assignments = {};
       for (const townId in townData) {
-        newAssignments[townId] = valueToDistrictMap[townData[townId][field]] || null;
+        let value = townData[townId][field];
+        if (field === 'RPC') {
+          value = rpcMapping[value] || value;
+        }
+        newAssignments[townId] = valueToDistrictIdMap[value] || null;
       }
       return newAssignments;
     });
+    setDistrictNames(initializeDistrictNames(newOrder, uniqueValues as (string | null)[]));
   }, [townData, resetApplication]);
 
   const confirmDeleteDistrict = useCallback(() => {
@@ -202,91 +326,99 @@ const App: React.FC = () => {
     
     const idToDelete = districtToDelete;
 
-    // Shift assignments and names
     setAssignments(prev => {
         const newAssignments = { ...prev };
         Object.keys(newAssignments).forEach(townId => {
             if (newAssignments[townId] === idToDelete) {
                 newAssignments[townId] = null;
-            } else if (newAssignments[townId] && newAssignments[townId]! > idToDelete) {
-                newAssignments[townId]! -= 1;
             }
         });
         return newAssignments;
     });
 
+    const newOrder = districtOrder.filter(id => id !== idToDelete);
+    setDistrictOrder(newOrder);
     setDistrictNames(prev => {
-        const newNames = { ...prev };
-        for (let i = idToDelete; i < currentNumDistricts; i++) {
-            newNames[i] = prev[i + 1];
-        }
-        newNames[currentNumDistricts] = `District ${currentNumDistricts}`; // Reset last
-        return newNames;
+      const newNames = {...prev};
+      delete newNames[idToDelete];
+      return newNames;
     });
     
-    // Adjust active district and total number of districts
-    if (activeDistrict === idToDelete || activeDistrict > currentNumDistricts - 1) {
-        setActiveDistrict(1);
-    } else if (activeDistrict > idToDelete) {
-        setActiveDistrict(prev => prev -1);
+    if (activeDistrict === idToDelete) {
+        setActiveDistrict(newOrder[0] || 1);
     }
     
-    setCurrentNumDistricts(prev => prev - 1);
     setDistrictToDelete(null);
-    showNotification(`District ${idToDelete} was removed.`, false);
+    showNotification(`District ${districtNames[idToDelete] || `District ${idToDelete}`} was removed.`, false);
 
-  }, [districtToDelete, activeDistrict, currentNumDistricts]);
+  }, [districtToDelete, activeDistrict, districtOrder, districtNames]);
+
+  const handleDistrictDragStart = (id: number) => {
+    setDraggedDistrict(id);
+  };
+
+  const handleDropInZone = (targetIndex: number) => {
+    if (draggedDistrict === null) return;
+
+    const currentOrder = [...districtOrder];
+    const fromIndex = currentOrder.indexOf(draggedDistrict);
+    if (fromIndex === -1) return;
+
+    const [draggedItem] = currentOrder.splice(fromIndex, 1);
+    
+    const finalIndex = targetIndex > fromIndex ? targetIndex - 1 : targetIndex;
+
+    currentOrder.splice(finalIndex, 0, draggedItem);
+
+    setDistrictOrder(currentOrder);
+    setDraggedDistrict(null);
+    setDropIndex(null);
+  };
 
 
-  // Notification handler
+  const handleDistrictDragEnd = () => {
+    setDraggedDistrict(null);
+    setDropIndex(null);
+  }
+
   const showNotification = (message: string, isError: boolean = false) => {
     setNotification({ message, isError });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  // URL State Serialization
   const generateShareableString = useCallback(() => {
-    const version = 'V7';
+    const version = 'V8';
     const separator = '|';
-    const districtsToTowns: { [key: number]: number[] } = {};
     
-    for (let i = 1; i <= currentNumDistricts; i++) districtsToTowns[i] = [];
+    const orderedDistrictData = districtOrder.map(id => {
+      const towns = Object.entries(assignments)
+        .filter(([, districtId]) => districtId === id)
+        .map(([townName]) => townData[townName]?.OBJECTID)
+        .filter(objId => objId !== undefined)
+        .sort((a,b) => a-b);
+      
+      const districtName = districtNames[id] || `District ${id}`;
+      return { id, name: districtName, towns };
+    });
 
-    for (const townId in assignments) {
-        const districtId = assignments[townId];
-        if (districtId !== null && townData[townId]) {
-          districtsToTowns[districtId].push(townData[townId].OBJECTID);
-        }
-    }
+    const districtStrings = orderedDistrictData.map(dist => {
+      const rleRuns = [];
+      if (dist.towns.length > 0) {
+          let startId = dist.towns[0], endId = dist.towns[0];
+          for (let i = 1; i < dist.towns.length; i++) {
+              if (dist.towns[i] === endId + 1) {
+                  endId = dist.towns[i];
+              } else {
+                  rleRuns.push(startId === endId ? toBase62(startId) : `${toBase62(startId)}~${toBase62(endId - startId)}`);
+                  startId = endId = dist.towns[i];
+              }
+          }
+          rleRuns.push(startId === endId ? toBase62(startId) : `${toBase62(startId)}~${toBase62(endId - startId)}`);
+      }
+      return `${toBase62(dist.id)},${encodeURIComponent(dist.name)},${rleRuns.join('.')}`;
+    }).join(';');
 
-    const districtStrings = [];
-    for (let districtId = 1; districtId <= currentNumDistricts; districtId++) {
-        const townObjIds = districtsToTowns[districtId];
-        if (townObjIds.length === 0) continue;
-        townObjIds.sort((a, b) => a - b);
-        
-        const rleRuns = [];
-        if (townObjIds.length > 0) {
-            let startId = townObjIds[0], endId = townObjIds[0];
-            for (let i = 1; i < townObjIds.length; i++) {
-                if (townObjIds[i] === endId + 1) {
-                    endId = townObjIds[i];
-                } else {
-                    rleRuns.push(startId === endId ? toBase62(startId) : `${toBase62(startId)}~${toBase62(endId - startId)}`);
-                    startId = endId = townObjIds[i];
-                }
-            }
-            rleRuns.push(startId === endId ? toBase62(startId) : `${toBase62(startId)}~${toBase62(endId - startId)}`);
-        }
-        districtStrings.push(`${toBase62(districtId)}:${rleRuns.join(',')}`);
-    }
-    
-    const districtNamesToSave = [];
-    for (let i = 1; i <= currentNumDistricts; i++) {
-        districtNamesToSave.push(encodeURIComponent(districtNames[i] || `District ${i}`));
-    }
-
-    const payloadParts = [version, toBase62(currentNumDistricts), districtStrings.join(';'), encodeURIComponent(mapName), districtNamesToSave.join(';')];
+    const payloadParts = [version, encodeURIComponent(mapName), districtStrings];
     const payloadString = payloadParts.join(separator);
 
     const compressed = pako.deflate(payloadString, { level: 9 });
@@ -295,12 +427,15 @@ const App: React.FC = () => {
         binaryString += String.fromCharCode(compressed[i]);
     }
     return btoa(binaryString).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }, [assignments, currentNumDistricts, mapName, townData, districtNames]);
+  }, [assignments, districtOrder, mapName, townData, districtNames]);
 
   const loadStateFromURL = (currentTownData: TownData, currentAssignments: Assignments) => {
     const params = new URLSearchParams(window.location.search);
     const data = params.get('data');
-    if (!data) return;
+    if (!data) {
+      setDistrictNames(initializeDistrictNames(districtOrder));
+      return;
+    }
 
     try {
         const base64 = data.replace(/-/g, '+').replace(/_/g, '/');
@@ -316,21 +451,65 @@ const App: React.FC = () => {
         const parts = decodedString.split('|');
         const version = parts[0];
 
-        if (version === 'V7') {
+        if (version === 'V8') {
+            const loadedMapName = decodeURIComponent(parts[1] || '');
+            const districtDataStr = parts[2] || '';
+            const newOrder: number[] = [];
+            const newNames: DistrictNames = {};
+            const newAssignments = { ...currentAssignments };
+            Object.keys(newAssignments).forEach(key => newAssignments[key] = null);
+
+            if (districtDataStr) {
+              districtDataStr.split(';').forEach(entry => {
+                const [idStr, nameStr, townsStr] = entry.split(',');
+                const districtId = fromBase62(idStr);
+                const districtName = decodeURIComponent(nameStr);
+                
+                newOrder.push(districtId);
+                newNames[districtId] = districtName;
+
+                if (townsStr) {
+                  townsStr.split('.').forEach(run => {
+                    if (run.includes('~')) {
+                      const [startIdStr, runLengthStr] = run.split('~');
+                      const startId = fromBase62(startIdStr);
+                      const runLength = fromBase62(runLengthStr);
+                      for (let i = 0; i <= runLength; i++) {
+                          const townId = objectIdToTownIdMap[startId + i];
+                          if (townId) newAssignments[townId] = districtId;
+                      }
+                    } else {
+                        const objId = fromBase62(run);
+                        const townId = objectIdToTownIdMap[objId];
+                        if (townId) newAssignments[townId] = districtId;
+                    }
+                  });
+                }
+              });
+            }
+            setDistrictOrder(newOrder);
+            setDistrictNames(newNames);
+            setAssignments(newAssignments);
+            setMapName(loadedMapName);
+
+        } else { // Fallback for old V7 URLs
             const numDistricts = fromBase62(parts[1]);
             const assignmentsString = parts[2] || '';
             const loadedMapName = decodeURIComponent(parts[3] || '');
             const districtNamesStr = parts[4] || '';
             
-            const loadedNames = initializeDistrictNames();
+            const newOrder = Array.from({length: numDistricts}, (_,i) => i + 1);
+            const loadedNames = initializeDistrictNames(newOrder);
 
-            setCurrentNumDistricts(numDistricts || INITIAL_DISTRICTS);
+            setDistrictOrder(newOrder);
             setMapName(loadedMapName);
 
             if (districtNamesStr) {
                 const decodedNames = districtNamesStr.split(';');
                 decodedNames.forEach((name, index) => {
-                    loadedNames[index + 1] = decodeURIComponent(name);
+                    if(index < newOrder.length) {
+                        loadedNames[newOrder[index]] = decodeURIComponent(name);
+                    }
                 });
             }
             setDistrictNames(loadedNames);
@@ -361,8 +540,6 @@ const App: React.FC = () => {
                 }
             }
             setAssignments(newAssignments);
-        } else {
-            showNotification('URL uses an old format. Some data may not load correctly.', true);
         }
     } catch (e) {
         console.error("Failed to load state from URL:", e);
@@ -373,8 +550,6 @@ const App: React.FC = () => {
     }
   };
 
-
-  // Export & Import Handlers
   const copyShareURLToClipboard = useCallback(() => {
     const shareableString = generateShareableString();
     const url = new URL(window.location.toString());
@@ -425,6 +600,107 @@ const App: React.FC = () => {
     setExportShareModalOpen(false);
   }, [assignments, townData, mapName, districtNames]);
 
+  const handleGenerateReport = useCallback(() => {
+    const dataForReport = districtOrder
+      .map(id => {
+          const stats = allDistrictStats[id];
+          if (!stats || stats.townCount === 0) return null;
+
+          const districtName = districtNames[id] || `District ${id}`;
+          
+          const townsWithAdm = stats.towns.map(townName => {
+              const townProps = townData[townName];
+              return {
+                  name: townName,
+                  adm: townProps?.['Public_School_Students'] || 0,
+                  county: townProps?.County || 'N/A',
+                  totalEEdGL: townProps?.Total_E_Ed_GL || 0,
+                  Home_E_Ed_GL: townProps?.Home_E_Ed_GL || 0,
+                  NonHome_E_Ed_GL: townProps?.NonHome_E_Ed_GL || 0,
+                  SqMi: townProps?.SqMi || 0,
+              };
+          });
+
+          const publicSchoolsInDistrict = stats.towns.flatMap(townName => schoolDetails[townName.toUpperCase()] || []);
+          const independentSchoolsInDistrict = stats.towns.flatMap(townName => independentSchoolDetails[townName.toUpperCase()] || []);
+
+          const enrollCategory = { small: 0, medium: 0, large: 0 };
+          publicSchoolsInDistrict.forEach(school => {
+              if (school.ENROLLMENT < 150) enrollCategory.small++;
+              else if (school.ENROLLMENT < 500) enrollCategory.medium++;
+              else enrollCategory.large++;
+          });
+          
+          const independentEnrollCategory = { small: 0, medium: 0, large: 0 };
+          independentSchoolsInDistrict.forEach(school => {
+              if (school.ENROLLMENT < 150) independentEnrollCategory.small++;
+              else if (school.ENROLLMENT < 500) independentEnrollCategory.medium++;
+              else independentEnrollCategory.large++;
+          });
+
+          const pcbAboveSALCount = publicSchoolsInDistrict.filter(s => s.PCB_Cat === 'Above SAL').length;
+
+          const fciCounts = { good: 0, fair: 0, poor: 0, veryPoor: 0 };
+          publicSchoolsInDistrict.forEach(school => {
+            switch (school.fciCategory) {
+              case '<10%': fciCounts.good++; break;
+              case '10.01-30%': fciCounts.fair++; break;
+              case '30.01-65%': fciCounts.poor++; break;
+              case '>65%': fciCounts.veryPoor++; break;
+              default: break;
+            }
+          });
+
+          const { homeEEdGL, nonHomeEEdGL, totalEEdGL } = stats.towns.reduce((acc, townName) => {
+              const townProps = townData[townName];
+              acc.homeEEdGL += townProps?.Home_E_Ed_GL || 0;
+              acc.nonHomeEEdGL += townProps?.NonHome_E_Ed_GL || 0;
+              acc.totalEEdGL += townProps?.Total_E_Ed_GL || 0;
+              return acc;
+          }, { homeEEdGL: 0, nonHomeEEdGL: 0, totalEEdGL: 0 });
+
+          const suStatus = { intact: [] as string[], broken: [] as string[] };
+          const rpcStatus = { intact: [] as string[], broken: [] as string[] };
+          
+          const districtSUs = [...new Set(stats.towns.map(t => townData[t].Supervisory_Union))];
+          districtSUs.forEach(su => {
+              const allTownsInSU = supervisoryUnions[su]?.towns || [];
+              const isIntact = allTownsInSU.every(t => assignments[t] === id);
+              if (isIntact) suStatus.intact.push(su); else suStatus.broken.push(su);
+          });
+          
+          const districtRPCs = [...new Set(stats.towns.map(t => townData[t].RPC))];
+          const allTownsByRPC: { [key: string]: string[] } = {};
+          Object.values(townData).forEach(t => {
+              if (!allTownsByRPC[t.RPC]) allTownsByRPC[t.RPC] = [];
+              allTownsByRPC[t.RPC].push(t.TOWNNAME);
+          });
+          
+          districtRPCs.forEach(rpc => {
+              const allTownsInRPC = allTownsByRPC[rpc] || [];
+              const isIntact = allTownsInRPC.every(t => assignments[t] === id);
+              if (isIntact) rpcStatus.intact.push(rpc); else rpcStatus.broken.push(rpc);
+          });
+
+          return {
+              id: `dist_${id}`, name: districtName, color: districtColors[id - 1], adm: stats.studentTotal,
+              grandList: stats.totalGL, homeEEdGL, nonHomeEEdGL, totalEEdGL, townCount: stats.townCount,
+              enrollCategory, independentEnrollCategory, independentSchoolCount: independentSchoolsInDistrict.length,
+              pcbAboveSALCount, fciCounts, townsWithAdm,
+              publicSchools: publicSchoolsInDistrict.map(school => ({ ...school, id: `sch_pub_${school.NAME.replace(/\s+/g, '_')}_${Math.random()}` })),
+              independentSchools: independentSchoolsInDistrict.map(school => ({ ...school, id: `sch_ind_${school.NAME.replace(/\s+/g, '_')}_${Math.random()}` })),
+              suStatus, rpcStatus,
+          };
+      })
+      .filter((d): d is ReportData => d !== null);
+    
+    const unassignedTowns = Object.values(assignments).filter(d => d === null).length;
+    setUnassignedTownsCount(unassignedTowns);
+    setReportData(dataForReport);
+    setCurrentView('report');
+    setExportShareModalOpen(false);
+
+  }, [districtOrder, allDistrictStats, districtNames, townData, schoolDetails, independentSchoolDetails, assignments, supervisoryUnions]);
 
   const handleExportJpg = useCallback(async () => {
       setExportShareModalOpen(false);
@@ -435,16 +711,16 @@ const App: React.FC = () => {
       const legendHtml = (() => {
           let legend = `<h2 style="font-size: 1.5rem; font-weight: bold; color: #003300; margin-bottom: 1rem;">${mapName || 'District Map'}</h2>`;
           legend += '<div style="display: grid; grid-template-columns: 1fr; gap: 1rem;">';
-          for (let i = 1; i <= currentNumDistricts; i++) {
-              const stats = allDistrictStats[i];
-              if (!stats || stats.townCount === 0) continue;
+          districtOrder.forEach(id => {
+              const stats = allDistrictStats[id];
+              if (!stats || stats.townCount === 0) return;
               const glPerStudent = stats.studentTotal > 0 ? stats.totalGL / stats.studentTotal : 0;
               const formattedGlPerStudent = `$${Math.floor(glPerStudent).toLocaleString('en-US')}`;
-              const districtName = districtNames[i] || `District ${i}`;
+              const districtName = districtNames[id] || `District ${id}`;
               legend += `
-                  <div style="border: 1px solid #ddd; border-left: 5px solid ${districtColors[i-1]}; padding: 0.5rem; border-radius: 4px; background-color: #f9f9f9; font-size: 0.8rem;">
+                  <div style="border: 1px solid #ddd; border-left: 5px solid ${districtColors[id-1]}; padding: 0.5rem; border-radius: 4px; background-color: #f9f9f9; font-size: 0.8rem;">
                       <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.25rem;">
-                          <span style="font-weight: bold; font-size: 1rem; color: ${districtColors[i-1]};">${districtName}</span>
+                          <span style="font-weight: bold; font-size: 1rem; color: ${districtColors[id-1]};">${districtName}</span>
                           <span style="font-size: 0.8rem; font-weight: 600;">${stats.studentTotal.toLocaleString()} students</span>
                       </div>
                       <div style="font-size: 0.75rem; color: #555;">
@@ -453,7 +729,7 @@ const App: React.FC = () => {
                           <div><strong>Grand List/Student:</strong> ${formattedGlPerStudent}</div>
                       </div>
                   </div>`;
-          }
+          });
           legend += '</div>';
           return legend;
       })();
@@ -487,7 +763,7 @@ const App: React.FC = () => {
     }).addTo(printMap);
       printMap.fitBounds((L.geoJSON(townGeoJSON) as L.GeoJSON).getBounds().pad(0.05));
 
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for map to render
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       try {
         const canvas = await html2canvas(document.getElementById('print-layout') as HTMLElement, { scale: 2, logging: false, useCORS: true, backgroundColor: '#ffffff' });
@@ -506,7 +782,7 @@ const App: React.FC = () => {
         printContainer.innerHTML = '';
         printContainer.classList.add('hidden');
       }
-  }, [assignments, townGeoJSON, mapName, currentNumDistricts, allDistrictStats, districtNames]);
+  }, [assignments, townGeoJSON, mapName, districtOrder, allDistrictStats, districtNames]);
   
   const handleFileImport = (file: File) => {
     if (!file || !file.type.match('text/csv')) {
@@ -537,102 +813,124 @@ const App: React.FC = () => {
     }
     
     let importedCount = 0;
-    let maxDistrictId = 0;
     const newAssignments = { ...assignments };
     Object.keys(newAssignments).forEach(key => { newAssignments[key] = null; });
-    const newDistrictNames = initializeDistrictNames();
+    const newDistrictNames: DistrictNames = {};
+    const newDistrictOrder: number[] = [];
+    const districtNameMap: { [id: number]: string } = {};
 
     lines.slice(1).forEach(line => {
-      const data = line.split(',');
-      const townName = data[townIndex]?.replace(/"/g, '').trim();
-      const districtIdStr = data[districtIdIndex]?.replace(/"/g, '').trim();
-      const districtId = parseInt(districtIdStr, 10);
-      
-      if (townData[townName] && !isNaN(districtId) && districtId > 0 && districtId <= MAX_DISTRICTS) {
-        newAssignments[townName] = districtId;
-        maxDistrictId = Math.max(maxDistrictId, districtId);
-        importedCount++;
-        if (districtNameIndex !== -1) {
-            const districtName = data[districtNameIndex]?.replace(/"/g, '').trim();
-            if (districtName) {
-                newDistrictNames[districtId] = districtName;
+        const data = line.split(',');
+        const townName = data[townIndex]?.replace(/"/g, '').trim();
+        const districtIdStr = data[districtIdIndex]?.replace(/"/g, '').trim();
+        const districtId = districtIdStr ? parseInt(districtIdStr, 10) : null;
+        
+        if (townData[townName] && districtId && districtId > 0 && districtId <= MAX_DISTRICTS) {
+            newAssignments[townName] = districtId;
+            if (!newDistrictOrder.includes(districtId)) {
+                newDistrictOrder.push(districtId);
+            }
+            importedCount++;
+            if (districtNameIndex !== -1) {
+                const districtName = data[districtNameIndex]?.replace(/"/g, '').trim();
+                if (districtName) {
+                    districtNameMap[districtId] = districtName;
+                }
             }
         }
-      }
     });
 
-    if (maxDistrictId > 0) {
-      setCurrentNumDistricts(maxDistrictId);
-    }
-    setAssignments(newAssignments);
+    newDistrictOrder.sort((a,b) => a-b);
+    newDistrictOrder.forEach(id => {
+        newDistrictNames[id] = districtNameMap[id] || `District ${id}`;
+    });
+    
+    setDistrictOrder(newDistrictOrder);
     setDistrictNames(newDistrictNames);
+    setAssignments(newAssignments);
     showNotification(`Successfully imported assignments for ${importedCount} towns.`, false);
   };
 
-  if (isLoading) {
+  const renderContent = () => {
+    if (currentView === 'report') {
+      return <ReportComponent reportData={reportData} onBack={() => setCurrentView('map')} unassignedTownsCount={unassignedTownsCount}/>;
+    }
+
     return (
-      <div className="flex items-center justify-center h-screen w-screen bg-gray-100">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold" style={{color: '#003300'}}>Loading Map Data...</h1>
-          <p className="text-gray-600">Please wait a moment.</p>
+      <>
+        {showSplashScreen && <SplashScreen onAcknowledge={handleAcknowledgeSplash} />}
+        <div className="lg:hidden flex flex-col items-center justify-center h-screen w-screen bg-gray-100 p-4 text-center">
+            <h1 className="text-3xl font-bold mb-2" style={{color: '#003300'}}>School District Builder</h1>
+            <h2 className="text-2xl font-bold mb-4" style={{color: '#003300'}}>Screen Size Notice</h2>
+            <p className="text-gray-700">
+                This application is designed for larger screens. For the best experience, please use a tablet or desktop computer.
+            </p>
         </div>
-      </div>
+
+        <div className="hidden lg:flex flex-row h-screen w-screen bg-gray-200">
+          <LeftSidebar
+            isCollapsed={isLeftSidebarCollapsed}
+            toggleCollapse={() => setLeftSidebarCollapsed(!isLeftSidebarCollapsed)}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            sortedSUs={sortedSUs}
+            supervisoryUnions={supervisoryUnions}
+            assignments={assignments}
+            onSUClick={handleSUClick}
+            onSUHover={setHoveredSU}
+            onPresetChange={handlePresetChange}
+            onHelpClick={() => setHelpModalOpen(true)}
+          />
+          
+          <div className="flex-1 flex flex-row h-full overflow-hidden">
+              <main 
+                  className={`transition-all duration-300 ease-in-out h-full ${isLeftSidebarCollapsed ? 'w-3/5' : 'w-1/2'}`}
+              >
+                  <MapComponent 
+                      townGeoJSON={townGeoJSON}
+                      assignments={assignments}
+                      onTownClick={handleTownClick}
+                      hoveredDistrict={hoveredDistrict}
+                      hoveredSU={hoveredSU}
+                      onMapReady={(map) => { mapRef.current = map; }}
+                  />
+              </main>
+              <div className={`transition-all duration-300 ease-in-out h-full ${isLeftSidebarCollapsed ? 'w-2/5' : 'w-1/2'}`}>
+                  <RightSidebar
+                    districtOrder={districtOrder}
+                    activeDistrict={activeDistrict}
+                    allDistrictStats={allDistrictStats}
+                    districtNames={districtNames}
+                    schoolDetails={schoolDetails}
+                    independentSchoolDetails={independentSchoolDetails}
+                    mapName={mapName}
+                    onMapNameChange={setMapName}
+                    onAddDistrict={addDistrict}
+                    onDistrictSelect={setActiveDistrict}
+                    onDistrictNameChange={handleDistrictNameChange}
+                    onDistrictHover={setHoveredDistrict}
+                    onExportShare={() => setExportShareModalOpen(true)}
+                    onImport={() => setImportModalOpen(true)}
+                    onReset={resetApplication}
+                    onDeleteDistrict={setDistrictToDelete}
+                    draggedDistrict={draggedDistrict}
+                    dropIndex={dropIndex}
+                    onDistrictDragStart={handleDistrictDragStart}
+                    onDistrictDragEnd={handleDistrictDragEnd}
+                    onDropInZone={handleDropInZone}
+                    onDragEnterDropZone={setDropIndex}
+                    onGenerateReport={handleGenerateReport}
+                  />
+              </div>
+          </div>
+        </div>
+      </>
     );
-  }
+  };
 
   return (
     <>
-      {/* Mobile/Small Screen Notice */}
-      <div className="lg:hidden flex flex-col items-center justify-center h-screen w-screen bg-gray-100 p-4 text-center">
-          <h1 className="text-3xl font-bold mb-2" style={{color: '#003300'}}>School District Builder</h1>
-          <h2 className="text-2xl font-bold mb-4" style={{color: '#003300'}}>Screen Size Notice</h2>
-          <p className="text-gray-700">
-              This application is designed for larger screens. For the best experience, please use a tablet or desktop computer.
-          </p>
-      </div>
-
-      {/* Main Application */}
-      <div className="hidden lg:flex flex-col lg:flex-row h-screen w-screen bg-gray-200">
-        <LeftSidebar
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          sortedSUs={sortedSUs}
-          supervisoryUnions={supervisoryUnions}
-          assignments={assignments}
-          onSUClick={handleSUClick}
-          onSUHover={setHoveredSU}
-        />
-        
-        <main className="w-full lg:w-1/2 h-1/2 lg:h-full order-1 lg:order-2">
-          <MapComponent 
-              townGeoJSON={townGeoJSON}
-              assignments={assignments}
-              onTownClick={handleTownClick}
-              hoveredDistrict={hoveredDistrict}
-              hoveredSU={hoveredSU}
-          />
-        </main>
-
-        <RightSidebar
-          mapName={mapName}
-          onMapNameChange={setMapName}
-          onPresetChange={handlePresetChange}
-          currentNumDistricts={currentNumDistricts}
-          activeDistrict={activeDistrict}
-          allDistrictStats={allDistrictStats}
-          districtNames={districtNames}
-          onAddDistrict={addDistrict}
-          onDistrictSelect={setActiveDistrict}
-          onDistrictNameChange={handleDistrictNameChange}
-          onDistrictHover={setHoveredDistrict}
-          onExportShare={() => setExportShareModalOpen(true)}
-          onImport={() => setImportModalOpen(true)}
-          onReset={resetApplication}
-          onDeleteDistrict={setDistrictToDelete}
-        />
-      </div>
-
-      {/* --- Modals and Notifications Portal --- */}
+      {renderContent()}
       {modalRoot && createPortal(
         <>
           {notification && (
@@ -675,6 +973,7 @@ const App: React.FC = () => {
               >
                   <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
                       <h3 className="text-xl font-bold mb-6 text-center">Export & Share</h3>
+                      
                       <div className="space-y-4">
                           <button onClick={handleExportJpg} className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">JPG Image</button>
                           <button onClick={exportAssignmentsToCsv} className="w-full bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded">CSV Assignments</button>
@@ -727,6 +1026,10 @@ const App: React.FC = () => {
                 </div>
               </div>
             </div>
+          )}
+
+          {isHelpModalOpen && (
+            <HelpModal onClose={() => setHelpModalOpen(false)} />
           )}
         </>,
         modalRoot

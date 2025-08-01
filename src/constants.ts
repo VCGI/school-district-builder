@@ -20,3 +20,5 @@ export const districtColors = [
 ];
 
 export const BASE62_CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+export const SCHOOLS_URL = 'https://s3.us-east-2.amazonaws.com/vtopendata-prd/_Other/Education/schools.json';

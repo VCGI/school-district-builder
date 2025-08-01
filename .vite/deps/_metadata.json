@@ -1,0 +1,61 @@
+{
+  "hash": "e9fd450c",
+  "configHash": "49838690",
+  "lockfileHash": "9ff745cd",
+  "browserHash": "96094fdc",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "63913e04",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "f9107076",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "0e79ffec",
+      "needsInterop": true
+    },
+    "react-dom": {
+      "src": "../../node_modules/react-dom/index.js",
+      "file": "react-dom.js",
+      "fileHash": "c5ca047e",
+      "needsInterop": true
+    },
+    "leaflet": {
+      "src": "../../node_modules/leaflet/dist/leaflet-src.js",
+      "file": "leaflet.js",
+      "fileHash": "4f7156dc",
+      "needsInterop": true
+    },
+    "pako": {
+      "src": "../../node_modules/pako/dist/pako.esm.mjs",
+      "file": "pako.js",
+      "fileHash": "f71b8af6",
+      "needsInterop": false
+    },
+    "html2canvas": {
+      "src": "../../node_modules/html2canvas/dist/html2canvas.esm.js",
+      "file": "html2canvas.js",
+      "fileHash": "1bc204eb",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-MXRL7WSR": {
+      "file": "chunk-MXRL7WSR.js"
+    },
+    "chunk-JCH2SJW3": {
+      "file": "chunk-JCH2SJW3.js"
+    },
+    "chunk-BUSYA2B4": {
+      "file": "chunk-BUSYA2B4.js"
+    }
+  }
+}

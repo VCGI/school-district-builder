@@ -26,6 +26,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const mapRef = useRef<Map | null>(null);
   const geoJsonLayerRef = useRef<L.GeoJSON | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const initialFitDone = useRef(false);
 
   const getTownStyle = useCallback((feature?: TownFeature): L.PathOptions => {
     if (!feature) return {};
@@ -53,79 +54,73 @@ const MapComponent: React.FC<MapComponentProps> = ({
   }, [assignments, hoveredDistrict, hoveredSU]);
 
   useEffect(() => {
-    if (mapRef.current && geoJsonLayerRef.current) {
+    if (geoJsonLayerRef.current) {
       geoJsonLayerRef.current.setStyle(getTownStyle);
     }
-  }, [getTownStyle]);
+  }, [getTownStyle, assignments]);
 
   useEffect(() => {
-    if (mapRef.current || !mapContainerRef.current) return;
+    if (!mapRef.current && mapContainerRef.current) {
+        mapRef.current = L.map(mapContainerRef.current, {
+            center: [44.0, -72.7],
+            zoom: 8,
+            attributionControl: false,
+            preferCanvas: true,
+        });
     
-    mapRef.current = L.map(mapContainerRef.current, {
-      center: [44.0, -72.7],
-      zoom: 8,
-      attributionControl: false,
-      preferCanvas: true,
-    });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(mapRef.current);
     
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(mapRef.current);
+        L.control.attribution({position: 'bottomright', prefix: false}).addTo(mapRef.current);
     
-    L.control.attribution({position: 'bottomright', prefix: false}).addTo(mapRef.current);
-    
-    if (onMapReady) {
-      onMapReady(mapRef.current);
+        if (onMapReady) {
+            onMapReady(mapRef.current);
+        }
     }
-    
-    return () => {
-      mapRef.current?.remove();
-      mapRef.current = null;
-    };
-  }, [onMapReady]);
 
-  useEffect(() => {
     if (mapRef.current && townGeoJSON) {
-      if (geoJsonLayerRef.current) {
-        geoJsonLayerRef.current.remove();
-      }
-      geoJsonLayerRef.current = L.geoJSON(townGeoJSON, {
-        style: getTownStyle,
-        onEachFeature: (feature: TownFeature, layer) => {
-          const props = feature.properties;
-          const townId = props.TOWNNAME;
-          const studentCount = props.Public_School_Students || 0;
-          const county = props.County || 'N/A';
-          const supervisoryUnion = props.Supervisory_Union || 'N/A';
-          const sqMi = props.SqMi ? props.SqMi.toFixed(2) : 'N/A';
-          
-          layer.bindTooltip(`
-            <div class="font-bold text-base text-gray-800">${townId}</div><hr class="my-1 border-gray-300">
-            <div><strong>County:</strong> ${county}</div>
-            <div><strong>Supervisory Union:</strong> ${supervisoryUnion}</div>
-            <div><strong>Students:</strong> ${studentCount.toLocaleString()}</div>
-            <div><strong>Area:</strong> ${sqMi} sq. mi.</div>`, 
-            { sticky: true, offset: L.point(15, 0) }
-          );
-
-          layer.on('click', () => onTownClick(townId));
+        if (geoJsonLayerRef.current) {
+            geoJsonLayerRef.current.remove();
         }
-      }).addTo(mapRef.current);
+        geoJsonLayerRef.current = L.geoJSON(townGeoJSON, {
+            style: getTownStyle,
+            onEachFeature: (feature: TownFeature, layer) => {
+                const props = feature.properties;
+                const townId = props.TOWNNAME;
+                const studentCount = props.Public_School_Students || 0;
+                const county = props.County || 'N/A';
+                const supervisoryUnion = props.Supervisory_Union || 'N/A';
+                const sqMi = props.SqMi ? props.SqMi.toFixed(2) : 'N/A';
+              
+                layer.bindTooltip(`
+                    <div class="font-bold text-base text-gray-800">${townId}</div><hr class="my-1 border-gray-300">
+                    <div><strong>County:</strong> ${county}</div>
+                    <div><strong>Supervisory Union:</strong> ${supervisoryUnion}</div>
+                    <div><strong>Students:</strong> ${studentCount.toLocaleString()}</div>
+                    <div><strong>Area:</strong> ${sqMi} sq. mi.</div>`, 
+                    { sticky: true, offset: L.point(15, 0) }
+                );
 
-      if (onMapReady === undefined) { 
-        const bounds = geoJsonLayerRef.current.getBounds();
-        if (bounds.isValid()) {
-            requestAnimationFrame(() => {
-                if (mapRef.current) {
-                    mapRef.current.invalidateSize();
-                    mapRef.current.fitBounds(bounds);
-                }
-            });
+                layer.on('click', () => onTownClick(townId));
+            }
+        }).addTo(mapRef.current);
+
+        if (!initialFitDone.current) {
+            const bounds = geoJsonLayerRef.current.getBounds();
+            if (bounds.isValid()) {
+                requestAnimationFrame(() => {
+                    if (mapRef.current) {
+                        mapRef.current.invalidateSize();
+                        mapRef.current.fitBounds(bounds);
+                    }
+                });
+            }
+            initialFitDone.current = true;
         }
-      }
     }
-  }, [townGeoJSON, onTownClick, onMapReady]); // Removed getTownStyle from dependencies
+  }, [townGeoJSON, onTownClick, onMapReady, getTownStyle]);
 
   return <div ref={mapContainerRef} id="map" className="h-full w-full bg-gray-200" />;
 };

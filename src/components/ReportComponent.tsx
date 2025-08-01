@@ -1,0 +1,466 @@
+// src/components/ReportComponent.tsx
+import React from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import type { SchoolDetail } from '../types'; 
+
+// Define the structure of the data this component expects
+interface ReportData {
+  id: string;
+  name: string;
+  color: string;
+  adm: number;
+  grandList: number;
+  homeEEdGL: number;
+  nonHomeEEdGL: number;
+  totalEEdGL: number;
+  townCount: number;
+  enrollCategory: { small: number; medium: number; large: number; };
+  independentEnrollCategory: { small: number; medium: number; large: number; };
+  independentSchoolCount: number;
+  pcbAboveSALCount: number;
+  fciCounts: { good: number; fair: number; poor: number; veryPoor: number; };
+  townsWithAdm: { name: string; adm: number; county: string; totalEEdGL: number; Home_E_Ed_GL: number; NonHome_E_Ed_GL: number; SqMi: number; }[];
+  publicSchools: (SchoolDetail & { id: string; fciCategory?: string })[];
+  independentSchools: (SchoolDetail & { id: string; })[];
+  suStatus: { intact: string[], broken: string[] };
+  rpcStatus: { intact: string[], broken: string[] };
+}
+
+interface ReportComponentProps {
+  reportData: ReportData[];
+  onBack: () => void; // Function to go back to the map view
+  unassignedTownsCount: number;
+}
+
+// --- Inline SVG Icons ---
+const ChevronDown = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 ml-1 inline-block shrink-0"><path d="m6 9 6 6 6-6"/></svg>
+);
+const ChevronUp = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 ml-1 inline-block shrink-0"><path d="m18 15-6-6-6 6"/></svg>
+);
+const CheckIcon = () => <span className="text-green-500">✓</span>;
+const XIcon = () => <span className="text-red-500">✕</span>;
+
+
+// --- Reusable Sub-Components ---
+
+const DataBar: React.FC<{ value: number; maxValue: number; color: string }> = ({ value, maxValue, color }) => {
+  const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
+  return (
+    <div className="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mt-1">
+      <div className="h-1.5 rounded-full" style={{ width: `${percentage}%`, backgroundColor: color }}></div>
+    </div>
+  );
+};
+
+const SchoolSizeChart: React.FC<{ data: { small: number; medium: number; large: number; }, max: number }> = ({ data, max }) => {
+  const total = data.small + data.medium + data.large;
+  if (total === 0) return <div className="text-center text-xs text-gray-400">N/A</div>;
+  
+  return (
+    <div className="flex items-end justify-around h-16 w-24 mx-auto" title={`Small (<150): ${data.small}\nMedium (150-500): ${data.medium}\nLarge (>500): ${data.large}`}>
+      <div className="flex flex-col items-center justify-end h-full w-1/3">
+        <div className="bg-gray-300 rounded-sm w-full" style={{ height: `${(data.small / max) * 100}%` }}></div>
+        <span className="text-xs mt-1">S</span>
+      </div>
+      <div className="flex flex-col items-center justify-end h-full w-1/3 mx-1">
+        <div className="bg-gray-400 rounded-sm w-full" style={{ height: `${(data.medium / max) * 100}%` }}></div>
+        <span className="text-xs mt-1">M</span>
+      </div>
+      <div className="flex flex-col items-center justify-end h-full w-1/3">
+        <div className="bg-gray-500 rounded-sm w-full" style={{ height: `${(data.large / max) * 100}%` }}></div>
+        <span className="text-xs mt-1">L</span>
+      </div>
+    </div>
+  );
+};
+
+const FciChart: React.FC<{ data: { good: number; fair: number; poor: number; veryPoor: number; } }> = ({ data }) => {
+  const fciColors = {
+    good: '#28a745',
+    fair: '#ffc107',
+    poor: '#fd7e14',
+    veryPoor: '#dc3545',
+  };
+  const total = data.good + data.fair + data.poor + data.veryPoor;
+  if (total === 0) return <div className="text-center text-xs text-gray-400">N/A</div>;
+
+  const title = `Facility Condition Index:\n<10%: ${data.good}\n10.01%-30% (Nearing end of useful life): ${data.fair}\n30.01%-65% (Reached end of useful life): ${data.poor}\n>65% (Replacement of building to be considered): ${data.veryPoor}`;
+  
+  return (
+    <div className="flex w-full h-4 rounded overflow-hidden bg-gray-200" title={title}>
+      <div style={{ width: `${(data.good / total) * 100}%`, backgroundColor: fciColors.good }}></div>
+      <div style={{ width: `${(data.fair / total) * 100}%`, backgroundColor: fciColors.fair }}></div>
+      <div style={{ width: `${(data.poor / total) * 100}%`, backgroundColor: fciColors.poor }}></div>
+      <div style={{ width: `${(data.veryPoor / total) * 100}%`, backgroundColor: fciColors.veryPoor }}></div>
+    </div>
+  );
+};
+
+const CustomTooltip = ({ active, payload, label, formatter }: any) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="p-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg">
+                <p className="font-bold text-gray-800 dark:text-gray-100">{label}</p>
+                {payload.map((pld: any, index: number) => (
+                    <p key={index} style={{ color: pld.color }} className="text-sm">
+                        {`${pld.name}: ${formatter ? formatter(pld.value) : pld.value}`}
+                    </p>
+                ))}
+            </div>
+        );
+    }
+    return null;
+};
+
+const DistrictProfileCard = ({ district }: { district: ReportData & { grandListPerStudent: number; numSchools: number } }) => {
+    const [schoolSortConfig, setSchoolSortConfig] = React.useState({ key: 'NAME', direction: 'ascending' });
+    const [townSortConfig, setTownSortConfig] = React.useState({ key: 'name', direction: 'ascending' });
+    const [indSchoolSortConfig, setIndSchoolSortConfig] = React.useState({ key: 'NAME', direction: 'ascending' });
+    
+    const numberFormatter = (value: number) => value ? value.toLocaleString() : '0';
+    const currencyFormatter = (value: number) => `$${Math.round(value || 0).toLocaleString()}`;
+    const sqMiFormatter = (value: number) => value ? value.toFixed(2) : '0.00';
+
+    const townTotals = React.useMemo(() => {
+        if (!district || !district.townsWithAdm) return { adm: 0, Home_E_Ed_GL: 0, NonHome_E_Ed_GL: 0, SqMi: 0 };
+        return district.townsWithAdm.reduce((acc, town) => {
+            acc.adm += town.adm;
+            acc.Home_E_Ed_GL += town.Home_E_Ed_GL;
+            acc.NonHome_E_Ed_GL += town.NonHome_E_Ed_GL;
+            acc.SqMi += town.SqMi;
+            return acc;
+        }, { adm: 0, Home_E_Ed_GL: 0, NonHome_E_Ed_GL: 0, SqMi: 0 });
+    }, [district]);
+
+    const sortedTowns = React.useMemo(() => {
+        if (!district || !district.townsWithAdm) return [];
+        let sortableItems = [...district.townsWithAdm];
+        if (townSortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                const valA = (a as any)[townSortConfig.key] || 0;
+                const valB = (b as any)[townSortConfig.key] || 0;
+                if (valA < valB) return townSortConfig.direction === 'ascending' ? -1 : 1;
+                if (valA > valB) return townSortConfig.direction === 'ascending' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [district, townSortConfig]);
+
+    const sortedSchools = React.useMemo(() => {
+        if (!district || !district.publicSchools) return [];
+        let sortableItems = [...district.publicSchools];
+        if (schoolSortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                const valA = (a as any)[schoolSortConfig.key] || '';
+                const valB = (b as any)[schoolSortConfig.key] || '';
+                if (valA < valB) return schoolSortConfig.direction === 'ascending' ? -1 : 1;
+                if (valA > valB) return schoolSortConfig.direction === 'ascending' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [district, schoolSortConfig]);
+
+    const sortedIndSchools = React.useMemo(() => {
+        if (!district || !district.independentSchools) return [];
+        let sortableItems = [...district.independentSchools];
+        if (indSchoolSortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                const valA = (a as any)[indSchoolSortConfig.key] || '';
+                const valB = (b as any)[indSchoolSortConfig.key] || '';
+                if (valA < valB) return indSchoolSortConfig.direction === 'ascending' ? -1 : 1;
+                if (valA > valB) return indSchoolSortConfig.direction === 'ascending' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [district, indSchoolSortConfig]);
+
+    const requestSort = (key: string, table: 'schools' | 'towns' | 'indSchools') => {
+        const configs = {
+            schools: [schoolSortConfig, setSchoolSortConfig],
+            towns: [townSortConfig, setTownSortConfig],
+            indSchools: [indSchoolSortConfig, setIndSchoolSortConfig]
+        };
+        const [config, setConfig] = configs[table] as [any, React.Dispatch<any>];
+        let direction = 'ascending';
+        if (config.key === key && config.direction === 'ascending') direction = 'descending';
+        setConfig({ key, direction });
+    };
+    
+    const getSortIcon = (key: string, table: 'schools' | 'towns' | 'indSchools') => {
+        const config = table === 'schools' ? schoolSortConfig : (table === 'towns' ? townSortConfig : indSchoolSortConfig);
+        if (config.key !== key) return null;
+        return config.direction === 'ascending' ? <ChevronUp /> : <ChevronDown />;
+    };
+
+    if (!district) return <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow">Please select a district to view its profile.</div>;
+
+    return (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mt-6">
+            <h3 className="text-2xl font-bold" style={{ color: district.color }}>{district.name}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4 mb-6 text-center">
+                <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg"><p className="text-sm text-gray-600 dark:text-gray-400">Total ADM</p><p className="text-2xl font-semibold text-gray-900 dark:text-white">{numberFormatter(district.adm)}</p></div>
+                <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg"><p className="text-sm text-gray-600 dark:text-gray-400">Total Grand List</p><p className="text-2xl font-semibold text-gray-900 dark:text-white">{currencyFormatter(district.grandList)}</p></div>
+                <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg"><p className="text-sm text-gray-600 dark:text-gray-400">Grand List / Student</p><p className="text-2xl font-semibold text-gray-900 dark:text-white">{currencyFormatter(district.grandListPerStudent)}</p></div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+              <div>
+                <h4 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Supervisory Union Status</h4>
+                <p className="text-sm text-gray-600">Intact: {district.suStatus.intact.length}</p>
+                <p className="text-sm text-gray-600">Broken: {district.suStatus.broken.length}</p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Regional Planning Commission Status</h4>
+                <p className="text-sm text-gray-600">Intact: {district.rpcStatus.intact.length}</p>
+                <p className="text-sm text-gray-600">Broken: {district.rpcStatus.broken.length}</p>
+              </div>
+            </div>
+            <div className="mt-8 space-y-8">
+                <div>
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Towns Served ({district.townsWithAdm.length})</h4>
+                    <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                            <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400">
+                                <tr>
+                                    <th className="px-4 py-2"><button onClick={() => requestSort('name', 'towns')} className="flex items-center font-semibold py-1">Town {getSortIcon('name', 'towns')}</button></th>
+                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('adm', 'towns')} className="flex items-center font-semibold w-full justify-end py-1">ADM {getSortIcon('adm', 'towns')}</button></th>
+                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('Home_E_Ed_GL', 'towns')} className="flex items-center font-semibold w-full justify-end py-1">Home Eq Ed GL {getSortIcon('Home_E_Ed_GL', 'towns')}</button></th>
+                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('NonHome_E_Ed_GL', 'towns')} className="flex items-center font-semibold w-full justify-end py-1">Non-Home Eq Ed GL {getSortIcon('NonHome_E_Ed_GL', 'towns')}</button></th>
+                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('SqMi', 'towns')} className="flex items-center font-semibold w-full justify-end py-1">Sq. Mi. {getSortIcon('SqMi', 'towns')}</button></th>
+                                </tr>
+                            </thead>
+                            <tbody>{sortedTowns.map(town => (<tr key={town.name} className="border-t border-gray-200 dark:border-gray-700"><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{town.name}</td><td className="px-4 py-2 text-right">{numberFormatter(town.adm)}</td><td className="px-4 py-2 text-right">{currencyFormatter(town.Home_E_Ed_GL)}</td><td className="px-4 py-2 text-right">{currencyFormatter(town.NonHome_E_Ed_GL)}</td><td className="px-4 py-2 text-right">{sqMiFormatter(town.SqMi)}</td></tr>))}</tbody>
+                            <tfoot className="bg-gray-100 dark:bg-gray-700 font-semibold text-gray-800 dark:text-gray-200">
+                                <tr className="border-t-2 border-gray-300 dark:border-gray-600">
+                                    <td className="px-4 py-2">Totals</td>
+                                    <td className="px-4 py-2 text-right">{numberFormatter(townTotals.adm)}</td>
+                                    <td className="px-4 py-2 text-right">{currencyFormatter(townTotals.Home_E_Ed_GL)}</td>
+                                    <td className="px-4 py-2 text-right">{currencyFormatter(townTotals.NonHome_E_Ed_GL)}</td>
+                                    <td className="px-4 py-2 text-right">{sqMiFormatter(townTotals.SqMi)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                <div>
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Public Schools ({district.publicSchools.length})</h4>
+                    <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                            <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400">
+                                <tr>
+                                    <th className="px-4 py-2"><button onClick={() => requestSort('NAME', 'schools')} className="flex items-center font-semibold py-1">School Name {getSortIcon('NAME', 'schools')}</button></th>
+                                    <th className="px-4 py-2"><button onClick={() => requestSort('TOWN', 'schools')} className="flex items-center font-semibold py-1">Town {getSortIcon('TOWN', 'schools')}</button></th>
+                                    <th className="px-4 py-2"><button onClick={() => requestSort('Type', 'schools')} className="flex items-center font-semibold py-1">Type {getSortIcon('Type', 'schools')}</button></th>
+                                    <th className="px-4 py-2"><button onClick={() => requestSort('Grades', 'schools')} className="flex items-center font-semibold py-1">Grades {getSortIcon('Grades', 'schools')}</button></th>
+                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('ENROLLMENT', 'schools')} className="flex items-center font-semibold w-full justify-end py-1">Enrollment {getSortIcon('ENROLLMENT', 'schools')}</button></th>
+                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('yearBuilt', 'schools')} className="flex items-center font-semibold w-full justify-end py-1">Year Built {getSortIcon('yearBuilt', 'schools')}</button></th>
+                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('fciCategory', 'schools')} className="flex items-center font-semibold w-full justify-end py-1">FCI Cat. {getSortIcon('fciCategory', 'schools')}</button></th>
+                                </tr>
+                            </thead>
+                            <tbody>{sortedSchools.map(school => (<tr key={school.id} className="border-t border-gray-200 dark:border-gray-700"><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{school.NAME}</td><td className="px-4 py-2">{school.TOWN}</td><td className="px-4 py-2">{school.Type}</td><td className="px-4 py-2">{school.Grades}</td><td className="px-4 py-2 text-right">{numberFormatter(school.ENROLLMENT)}</td><td className="px-4 py-2 text-right">{school.yearBuilt || 'N/A'}</td><td className="px-4 py-2 text-right font-mono">{school.fciCategory || 'N/A'}</td></tr>))}</tbody>
+                        </table>
+                    </div>
+                </div>
+                 <div>
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Independent Schools ({district.independentSchools.length})</h4>
+                    <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                            <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400">
+                                <tr>
+                                    <th className="px-4 py-2"><button onClick={() => requestSort('NAME', 'indSchools')} className="flex items-center font-semibold py-1">School Name {getSortIcon('NAME', 'indSchools')}</button></th>
+                                    <th className="px-4 py-2"><button onClick={() => requestSort('TOWN', 'indSchools')} className="flex items-center font-semibold py-1">Town {getSortIcon('TOWN', 'indSchools')}</button></th>
+                                    <th className="px-4 py-2"><button onClick={() => requestSort('Type', 'indSchools')} className="flex items-center font-semibold py-1">Type {getSortIcon('Type', 'indSchools')}</button></th>
+                                    <th className="px-4 py-2"><button onClick={() => requestSort('Grades', 'indSchools')} className="flex items-center font-semibold py-1">Grades {getSortIcon('Grades', 'indSchools')}</button></th>
+                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('ENROLLMENT', 'indSchools')} className="flex items-center font-semibold w-full justify-end py-1">Enrollment {getSortIcon('ENROLLMENT', 'indSchools')}</button></th>
+                                </tr>
+                            </thead>
+                            <tbody>{sortedIndSchools.map(school => (<tr key={school.id} className="border-t border-gray-200 dark:border-gray-700"><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{school.NAME}</td><td className="px-4 py-2">{school.TOWN}</td><td className="px-4 py-2">{school.Type}</td><td className="px-4 py-2">{school.Grades}</td><td className="px-4 py-2 text-right">{numberFormatter(school.ENROLLMENT)}</td></tr>))}</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, unassignedTownsCount }) => {
+    const [sortConfig, setSortConfig] = React.useState({ key: 'name', direction: 'ascending' });
+    const [selectedDistrictId, setSelectedDistrictId] = React.useState(
+        reportData && reportData.length > 0 ? reportData[0].id : null
+    );
+
+    const processedData = React.useMemo(() => {
+        if (!reportData) return [];
+        return reportData.map(d => ({
+            ...d,
+            grandListPerStudent: d.adm > 0 ? d.grandList / d.adm : 0,
+            numSchools: d.publicSchools ? d.publicSchools.length : 0
+        }));
+    }, [reportData]);
+    
+    const maxValues = React.useMemo(() => {
+        if (!processedData || processedData.length === 0) {
+            return { townCount: 0, adm: 0, grandListPerStudent: 0, totalEEdGL: 0, schoolSize: 0 };
+        }
+        const maxSchoolSize = Math.max(1, ...processedData.flatMap(d => [
+            d.enrollCategory.small, d.enrollCategory.medium, d.enrollCategory.large,
+            d.independentEnrollCategory.small, d.independentEnrollCategory.medium, d.independentEnrollCategory.large
+        ]));
+        return {
+            townCount: Math.max(...processedData.map(d => d.townCount)),
+            adm: Math.max(...processedData.map(d => d.adm)),
+            grandListPerStudent: Math.max(...processedData.map(d => d.grandListPerStudent)),
+            totalEEdGL: Math.max(...processedData.map(d => d.totalEEdGL)),
+            schoolSize: maxSchoolSize
+        };
+    }, [processedData]);
+
+    const sortedTableData = React.useMemo(() => {
+        let sortableItems = [...processedData];
+        if (sortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                const valA = (a as any)[sortConfig.key] || 0;
+                const valB = (b as any)[sortConfig.key] || 0;
+                if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+                if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [processedData, sortConfig]);
+    
+    const requestSort = (key: string) => {
+        let direction = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') direction = 'descending';
+        setSortConfig({ key, direction });
+    };
+
+    const getSortIcon = (key: string) => {
+        if (sortConfig.key !== key) return null;
+        return sortConfig.direction === 'ascending' ? <ChevronUp /> : <ChevronDown />;
+    };
+    
+    const overviewTableHeaders = [
+        { key: 'name', label: 'District Name' },
+        { key: 'townCount', label: 'Towns' },
+        { key: 'adm', label: 'ADM' },
+        { key: 'grandListPerStudent', label: 'GL / Student' },
+        { key: 'totalEEdGL', label: 'Total Eq Ed GL' },
+        { key: 'enrollCategory', label: 'Public Schools by Size'},
+        { key: 'independentSchoolCount', label: 'Ind. Schools by Size' },
+        { key: 'fciCounts', label: 'FCI Categories' },
+        { key: 'suStatus', label: 'SU INTACT' },
+    ];
+
+    const currencyMillionFormatter = (value: number) => `$${(Math.round((value || 0) / 100000) / 10).toFixed(1)}M`;
+    const currencyBillionFormatter = (value: number) => `$${(Math.round((value || 0) / 100000000) / 10).toFixed(1)}B`;
+    const numberFormatter = (value: number) => value ? value.toLocaleString() : '0';
+    const fullCurrencyFormatter = (value: number) => `$${Math.round(value || 0).toLocaleString()}`;
+
+
+    // Find the selected district object safely
+    const selectedDistrict = processedData.find(d => d.id === selectedDistrictId);
+
+    return (
+        <div className="bg-gray-50 dark:bg-gray-900 h-screen overflow-y-auto font-sans">
+            <div className="sticky top-0 z-10 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between items-center py-4">
+                        <div>
+                            <h1 className="text-3xl lg:text-4xl font-bold" style={{ color: '#003300' }}>School District Builder Report</h1>
+                            <p className="mt-1 text-base text-gray-600 dark:text-gray-400">An overview of key metrics for all districts.</p>
+                        </div>
+                        <button onClick={onBack} className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded shrink-0 ml-4">
+                            Back to Map
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                {unassignedTownsCount > 0 && (
+                    <div className="my-4 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700" role="alert">
+                        <p className="font-bold">Warning</p>
+                        <p>{unassignedTownsCount} town(s) are not assigned to any district and are not included in this report.</p>
+                    </div>
+                )}
+                <div className="pt-10">
+                    <div className="mb-12">
+                        <h2 className="text-3xl font-semibold pb-1 border-b-2 border-gray-300 mb-6" style={{ color: '#003300' }}>District Overview</h2>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Average Daily Membership (FY25)</h3><ResponsiveContainer width="100%" height={300}><BarChart data={processedData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.2)" /><XAxis dataKey="name" tick={{ fill: '#6b7280' }} fontSize={12} interval={0} angle={-20} textAnchor="end" height={60} /><YAxis tick={{ fill: '#6b7280' }} tickFormatter={numberFormatter} /><Tooltip content={<CustomTooltip formatter={numberFormatter} />} cursor={{fill: 'rgba(239, 246, 255, 0.5)'}} /><Bar dataKey="adm" name="ADM" radius={[4, 4, 0, 0]}>{processedData.map((entry) => (<Cell key={`cell-${entry.id}`} fill={entry.color || '#8884d8'} />))}</Bar></BarChart></ResponsiveContainer></div>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Grand List per Student (2024)</h3><ResponsiveContainer width="100%" height={300}><BarChart data={processedData} margin={{ top: 5, right: 20, left: 50, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.2)" /><XAxis dataKey="name" tick={{ fill: '#6b7280' }} fontSize={12} interval={0} angle={-20} textAnchor="end" height={60} /><YAxis tick={{ fill: '#6b7280' }} tickFormatter={fullCurrencyFormatter} /><Tooltip content={<CustomTooltip formatter={fullCurrencyFormatter} />} cursor={{fill: 'rgba(239, 246, 255, 0.5)'}} /><Bar dataKey="grandListPerStudent" name="GL / Student" radius={[4, 4, 0, 0]}>{processedData.map((entry) => (<Cell key={`cell-${entry.id}`} fill={entry.color || '#82ca9d'} />))}</Bar></BarChart></ResponsiveContainer></div>
+                        </div>
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+                            <div className="p-6"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">District Data Table</h3><p className="text-sm text-gray-500 dark:text-gray-400">Click headers to sort.</p></div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                                        <tr>
+                                            {overviewTableHeaders.map((header) => (
+                                                <th key={header.key} scope="col" className="px-6 py-3 whitespace-nowrap">
+                                                    <button onClick={() => requestSort(header.key)} className="flex items-center uppercase font-semibold py-1">
+                                                        {header.label}
+                                                        {getSortIcon(header.key)}
+                                                    </button>
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {sortedTableData.map((item) => (
+                                            <tr key={item.id} className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                                <td className="px-6 py-4 font-medium" style={{ color: item.color }}>{item.name}</td>
+                                                <td className="px-6 py-4"><div className="text-center">{numberFormatter(item.townCount)}</div><DataBar value={item.townCount} maxValue={maxValues.townCount} color={item.color} /></td>
+                                                <td className="px-6 py-4"><div>{numberFormatter(item.adm)}</div><DataBar value={item.adm} maxValue={maxValues.adm} color={item.color} /></td>
+                                                <td className="px-6 py-4"><div>{currencyMillionFormatter(item.grandListPerStudent)}</div><DataBar value={item.grandListPerStudent} maxValue={maxValues.grandListPerStudent} color={item.color} /></td>
+                                                <td className="px-6 py-4"><div>{currencyBillionFormatter(item.totalEEdGL)}</div><DataBar value={item.totalEEdGL} maxValue={maxValues.totalEEdGL} color={item.color} /></td>
+                                                <td className="px-6 py-4"><SchoolSizeChart data={item.enrollCategory} max={maxValues.schoolSize} /></td>
+                                                <td className="px-6 py-4"><SchoolSizeChart data={item.independentEnrollCategory} max={maxValues.schoolSize} /></td>
+                                                <td className="px-6 py-4"><FciChart data={item.fciCounts} /></td>
+                                                <td className="px-6 py-4 text-center"><div title={`Intact: ${item.suStatus.intact.join(', ')}\nBroken: ${item.suStatus.broken.join(', ')}`}><CheckIcon /> {item.suStatus.intact.length} <XIcon /> {item.suStatus.broken.length}</div></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 className="text-3xl font-semibold pb-1 border-b-2 border-gray-300 mb-6 mt-12" style={{ color: '#003300' }}>District Profiles</h2>
+                         <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select a District to View Profile:</label>
+                            <div className="flex flex-wrap gap-2">
+                                {processedData.map(d => (
+                                    <button
+                                        key={d.id}
+                                        onClick={() => setSelectedDistrictId(d.id)}
+                                        className={`px-3 py-1 text-sm font-semibold rounded-full transition-all duration-150 ${
+                                            selectedDistrictId === d.id
+                                                ? 'text-white shadow-md scale-105'
+                                                : 'text-gray-800'
+                                        }`}
+                                        style={{ 
+                                            backgroundColor: d.color,
+                                            border: selectedDistrictId === d.id ? `2px solid rgba(0,0,0,0.3)` : `2px solid transparent`
+                                        }}
+                                    >
+                                        {d.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        {selectedDistrict && <DistrictProfileCard district={selectedDistrict} />}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default ReportComponent;

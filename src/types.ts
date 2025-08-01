@@ -1,4 +1,5 @@
-import { Feature, Geometry, FeatureCollection } from 'geojson';
+// src/types.ts
+import type { Feature, Geometry, FeatureCollection } from 'geojson';
 
 export enum Tab {
   About = 'About',
@@ -51,4 +52,21 @@ export interface DistrictStats {
 
 export interface AllDistrictStats {
   [districtId: number]: DistrictStats;
+}
+
+export interface SchoolDetail {
+  NAME: string;
+  Grades: string;
+  ENROLLMENT: number;
+  TOWN: string;
+  Type: string;
+  yearBuilt?: number;
+  fciCategory?: string;
+  enrollYear?: string;
+  Notes?: string; // Added Notes property
+  PCB_Cat?: string; // Added PCB_Cat property
+}
+
+export interface SchoolDetailsByTown {
+    [townName: string]: SchoolDetail[];
 }

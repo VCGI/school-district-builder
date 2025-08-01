@@ -2,10 +2,35 @@
 <html>
 <head>
   <title>Redirecting...</title>
-  <meta http-equiv="refresh" content="0; url=./v01/" />
-  <link rel="canonical" href="./v01/" />
+  
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
+  <meta property="og:title" content="Vermont School District Builder" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://map.vermont.gov/education/district-builder/" />
+  <meta property="og:image" content="https://map.vermont.gov/education/district-builder/school_dist_builder_thumb.jpg" />
+  <meta property="og:description" content="An interactive tool to create and visualize custom school district maps for Vermont. Assign towns to districts, view demographic data, and share or export your custom maps." />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <script type="text/javascript">
+    // This script will redirect to the root of the site
+    // and pass along any URL parameters and the hash.
+    window.location.replace(
+      '../' + window.location.search + window.location.hash
+    );
+  </script>
 </head>
 <body>
-  <p>If you are not redirected automatically, follow this <a href="./v01/">link to the latest version</a>.</p>
+  <p>If you are not redirected automatically, follow this <a id="redirect-link" href="../">link to the latest version</a>.</p>
+  <script type="text/javascript">
+    // This updates the link in the body to include the parameters as well,
+    // just in case the automatic redirect fails.
+    var link = document.getElementById('redirect-link');
+    if (link) {
+      link.href = '../' + window.location.search + window.location.hash;
+    }
+  </script>
 </body>
 </html>
