@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Tab, SupervisoryUnions, Assignments } from '../types';
 import { districtColors } from '../constants';
+import { version } from '../../package.json'; // Import version from package.json
 
 interface LeftSidebarProps {
   isCollapsed: boolean;
@@ -37,8 +38,8 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
   return (
     <aside className={`relative h-full flex flex-col shadow-lg bg-gray-50 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-1/4'}`}>
-        <button 
-            onClick={toggleCollapse} 
+        <button
+            onClick={toggleCollapse}
             className="absolute top-1/2 -right-6 transform -translate-y-1/2 w-6 h-12 flex items-center justify-center text-white rounded-r-lg focus:outline-none transition-opacity hover:opacity-90"
             aria-label="Toggle Sidebar"
             style={{ backgroundColor: '#003300', zIndex: 1001 }}
@@ -60,7 +61,8 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
         </div>
         <div className="p-4 border-b flex-shrink-0">
           <h1 className="text-xl font-bold">School District Builder</h1>
-          <p className="text-xs text-gray-500 -mt-1">BETA v0.2.2</p>
+          {/* Use the imported version here */}
+          <p className="text-xs text-gray-500 -mt-1">BETA v{version}</p>
         </div>
 
         <div className="flex border-b flex-shrink-0">
@@ -71,7 +73,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
         <div className="flex-grow overflow-y-auto relative">
           {activeTab === Tab.About && (
             <div className="p-4 animate-fade-in space-y-6">
-              <button 
+              <button
                 onClick={onHelpClick}
                 className="w-full text-left bg-gray-100 hover:bg-gray-200 p-3 rounded-lg border border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
