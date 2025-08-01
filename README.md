@@ -1,6 +1,6 @@
 # **Vermont School District Builder**
 
-[https://map.vermont.gov/education/district-builder/v01/](https://map.vermont.gov/education/district-builder/v01/)
+[https://map.vermont.gov/education/district-builder/v01/](https://map.vermont.gov/education/district-builder/)
 
 An interactive web application for creating, visualizing, and sharing custom school district maps for the state of Vermont. This tool is designed for general planning and reference, particularly to meet the requirements of H.454 (Act 73\) of 2025\.
 
