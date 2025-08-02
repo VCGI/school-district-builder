@@ -1,0 +1,46 @@
+#.aiexclude
+
+# Dependency directories
+# Exclude folders containing third-party libraries and packages.
+node_modules/
+
+
+# Build and distribution output
+# Exclude compiled files and bundled assets.
+build/
+dist/
+out/
+target/
+
+# Version control
+# Exclude the version control system's internal files.
+.git/
+.svn/
+.hg/
+
+# Logs and temporary files
+# Exclude log files and temporary artifacts.
+*.log
+logs/
+tmp/
+temp/
+
+# Environment variables
+# Prevent sensitive environment variables from being included in the context.
+.env
+.env.*
+!/.env.example
+
+# IDE and editor-specific files
+# Exclude configuration files for local development environments.
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Operating System files
+.DS_Store
+Thumbs.db
