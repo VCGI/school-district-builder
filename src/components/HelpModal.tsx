@@ -122,8 +122,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
                         (<a href="https://geodata.vermont.gov/datasets/3f464b0e1980450e9026430a635bff0a_0/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">link</a>)
                     </li>
                     <li>
-                        Grand List information is available from the Tax Department
-                        (<a href="https://tax.vermont.gov/document/pvr-annual-report-2024-data-education-and-municipal-listed-and-equalized-grand-list-town" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">link</a>)
+                        Equalized Grand List data are projected for 2025 by the Tax Department. The values reflect the projected homestead exemption amounts by household from Act 73, Sec. 52 [<a href="https://legislature.vermont.gov/Documents/2026/Docs/ACTS/ACT073/ACT073 As Enacted.pdf#page=114" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">link</a>], based on FY25 homestead declaration data.
                     </li>
                     <li>
                         School data was compiled from the Agency of Education, the Joint Fiscal Office, and the National Center for Education Statistics. Town level student data is derived from Average Daily Membership by Resident District for FY25 as published by the Vermont Agency of Education (<a href="https://education.vermont.gov/sites/aoe/files/documents/edu-average-daily-membership-by-resident-district-fy25.xlsx" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">link</a>)
