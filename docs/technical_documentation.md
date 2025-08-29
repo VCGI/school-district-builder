@@ -4,33 +4,31 @@
 
 This is an interactive, single-page web application for creating, visualizing, and analyzing custom school district maps for the state of Vermont. It allows users to group towns into districts, view real-time demographic and financial data for those districts, and export their work in various formats.
 
-The application is built with a modern web stack, emphasizing a reactive user interface, efficient state management, and clear data presentation. It is designed to be a data exploration tool for planners, educators, and the general public.
-
 ---
 
 ## 2. Technology Stack
 
-The project is built using the following core technologies:
+The project is built using the following:
 
 -   **Framework**: [React](https://reactjs.org/) (v18.3.1)
 -   **Language**: [TypeScript](https://www.typescriptlang.org/) (v5.4.5)
 -   **Build Tool**: [Vite](https://vitejs.dev/) (v7.0.5)
 -   **Styling**: [Tailwind CSS](https://tailwindcss.com/) (v3.4.4)
--   **Mapping**: [Leaflet](https://leafletjs.com/) (v1.9.4) for interactive maps
--   **Charting**: [Recharts](https://recharts.org/) (v2.12.7) for data visualization
+-   **Mapping**: [Leaflet](https://leafletjs.com/) (v1.9.4)
+-   **Charting**: [Recharts](https://recharts.org/) (v2.12.7)
 -   **State Management**: Native React Hooks (`useState`, `useEffect`, `useCallback`, `useMemo`)
--   **Data Compression**: [pako](https://github.com/nodeca/pako) (v2.1.0) for compressing URL data
--   **Image Export**: [html2canvas](https://html2canvas.hertzen.com/) (v1.4.1) for generating JPG images of the map
+-   **Data Compression**: [pako](https://github.com/nodeca/pako) (v2.1.0)
+-   **Image Export**: [html2canvas](https://html2canvas.hertzen.com/) (v1.4.1)
 
 ---
 
 ## 3. Data Schema
 
-The application relies on two primary data sources fetched from remote URLs.
+The application relies on two json files in VCGI's AWS Open Data S3 Bucket.
 
 ### 3.1 `VT_School_Geo.json`
 
-This GeoJSON `FeatureCollection` contains the polygonal geometries for each town in Vermont, along with detailed properties for each town. The application uses these properties to populate town-level statistics.
+This GeoJSON `FeatureCollection` contains the polygon geometries for each town in Vermont, along with detailed properties for each town. The application uses these properties to populate town-level statistics. The geometry has been simplified for perfomance.
 
 **File Location:** `https://s3.us-east-2.amazonaws.com/vtopendata-prd/_Other/Education/VT_School_Geo.json`
 
@@ -43,11 +41,11 @@ This GeoJSON `FeatureCollection` contains the polygonal geometries for each town
 | `County`                      | `string`  | The county the town belongs to.                                             | Yes         |
 | `Supervisory_Union`           | `string`  | The supervisory union the town is part of.                                  | Yes         |
 | `Public_School_Students`      | `number`  | The number of public school students in the town.                           | Yes         |
-| `Total_E_Ed_GL`               | `number`  | The town's total equalized education Grand List value.                      | Yes         |
+| `Total_E_Ed_GL_Act73`               | `number`  | The town's total equalized education Grand List value.                      | Yes         |
 | `Public_Schools`              | `number`  | The number of public schools located in the town.                           | Yes         |
 | `SqMi`                        | `number`  | The area of the town in square miles.                                       | Yes         |
-| `Home_E_Ed_GL`                | `number`  | The homestead portion of the equalized education Grand List.                | Yes         |
-| `NonHome_E_Ed_GL`             | `number`  | The non-homestead portion of the equalized education Grand List.            | Yes         |
+| `Home_E_Ed_GL_Act73`                | `number`  | The homestead portion of the equalized education Grand List.                | Yes         |
+| `NonHome_E_Ed_GL_Act73_Act73`             | `number`  | The non-homestead portion of the equalized education Grand List.            | Yes         |
 | `RPC`                         | `string`  | The abbreviation for the Regional Planning Commission.                      | Yes         |
 | `School_Board_Association`    | `string`  | The School Board Association region.                                        | Yes         |
 | `CTE_Region`                  | `string`  | The Career and Technical Education (CTE) region.                            | Yes         |
@@ -55,11 +53,11 @@ This GeoJSON `FeatureCollection` contains the polygonal geometries for each town
 
 *This schema is reflected in the `TownProperties` interface in `src/types.ts`.*
 
-### 3.2 `schools.json`
+### 3.2 `schools_all.json`
 
 This GeoJSON `FeatureCollection` provides point locations and detailed information for both public and independent schools throughout Vermont.
 
-**File Location:** `https://s3.us-east-2.amazonaws.com/vtopendata-prd/_Other/Education/schools.json`
+**File Location:** `https://s3.us-east-2.amazonaws.com/vtopendata-prd/_Other/Education/schools_all.json`
 
 **Schema for `properties` object within each GeoJSON Feature:**
 
@@ -76,7 +74,6 @@ This GeoJSON `FeatureCollection` provides point locations and detailed informati
 | `fciCategory`  | `string`  | The Facility Condition Index category (e.g., "<10%", "10.01-30%").       | Yes         |
 | `enrollYear`   | `string`  | The academic year for the provided enrollment data.                       | Yes         |
 | `Notes`        | `string`  | Additional notes, primarily for independent schools.                      | Yes         |
-| `PCB_Cat`      | `string`  | The PCB testing category (e.g., "Below SAL", "Above SAL", "Not Tested").  | Yes         |
 
 *This schema is reflected in the `SchoolDetail` interface in `src/types.ts`.*
 
@@ -84,7 +81,7 @@ This GeoJSON `FeatureCollection` provides point locations and detailed informati
 
 ## 4. High-Level Architecture
 
-The application follows a component-based architecture centered around a main `App` component that acts as the single source of truth.
+The application follows a component-based architecture centered around a main `App` component.
 
 -   **Centralized State**: All major application state is held within the `App.tsx` component.
 -   **Unidirectional Data Flow**: State is passed down to child components via props.
@@ -121,8 +118,8 @@ This is the most critical component, acting as the application's central control
 
 The application is built using **Vite**.
 
--   **Development**: `npm run dev` starts the Vite development server with Hot Module Replacement (HMR) for a fast development experience.
--   **Production**: `npm run build` uses Vite to bundle the application's assets into optimized static files and places them in the `dist/` directory, ready for deployment.
+-   **Development**: `npx vite` starts the Vite development server with Hot Module Replacement (HMR) for a fast development experience.
+-   **Production**: `npx vite build` uses Vite to bundle the application's assets into optimized static files and places them in the `dist/` directory, ready for deployment.
 -   **Base Path**: The `vite.config.ts` file is configured with `base: ''`, which ensures that asset paths in the built HTML are relative. This is crucial for hosting in a subdirectory.
 
 ---
@@ -139,7 +136,7 @@ To run the application locally, follow these steps:
    
 3.  **Run the development server**:
     ```bash
-    npm run dev
+    npx vite
     ```
    
     This will start the Vite development server. You can view the application in your browser at the specified local address.
@@ -154,7 +151,7 @@ The application is hosted as a **Static Web App** in **Azure Blob Storage**.
 
 1.  **Build the Application**: First, generate the production-ready static files by running the build command from the project root:
     ```bash
-    npm run build
+    npx vite build
     ```
     This command creates a `dist` folder containing `index.html`, along with the necessary CSS and JavaScript assets.
 

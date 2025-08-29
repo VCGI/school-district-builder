@@ -1,8 +1,8 @@
 # **Vermont School District Builder**
 
-[https://map.vermont.gov/education/district-builder/v01/](https://map.vermont.gov/education/district-builder/)
+[https://map.vermont.gov/education/district-builder/](https://map.vermont.gov/education/district-builder/)
 
-An interactive web application for creating, visualizing, and sharing custom school district maps for the state of Vermont. This tool is designed for general planning and reference, particularly to meet the requirements of H.454 (Act 73\) of 2025\.
+An interactive web application for creating, visualizing, and sharing custom school district maps for the state of Vermont. This tool is designed for general planning and reference, particularly to meet the requirements of H.454 (Act 73) of 2025.
 
 ## **Features**
 
@@ -16,31 +16,6 @@ An interactive web application for creating, visualizing, and sharing custom sch
     * Download a high-resolution JPG image of your custom map.
     * Export town-to-district assignments as a CSV file.
     * Create and copy a shareable URL that saves your entire map configuration for others to view and edit.
-
-
-## **Running the Project Locally**
-
-**Prerequisites:** [Node.js](https://nodejs.org/) (version 14 or higher)
-
-1. **Clone the repository:**  
-   git clone https://github.com/vcgijadams/school-district-builder.git  
-   cd school-district-builder
-
-2. **Install dependencies:**  
-   npm install
-
-3. **Start the development server:**  
-   npm run dev
-
-   The application will now be running on http://localhost:5173.
-
-## **Building for Production**
-
-To create an optimized static build of the application, run the following command:
-
-npm run build
-
-The output files will be generated in the dist/ directory. You can then deploy this directory to any static hosting service..
 
 ## **Notice & Disclaimer**
 

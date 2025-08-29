@@ -6,10 +6,10 @@ import pako from 'pako';
 import html2canvas from 'html2canvas';
 import 'leaflet/dist/leaflet.css';
 import {
-  Tab, TownData, Assignments, SupervisoryUnions, TownGeoJSON, AllDistrictStats, DistrictNames, SchoolDetailsByTown
+  Tab, TownData, Assignments, SupervisoryUnions, TownGeoJSON, AllDistrictStats, DistrictNames, SchoolDetailsByTown, ReportData, SchoolDetail, SchoolPointFeature, SchoolTypeFilters
 } from './types';
 import {
-  GEOJSON_URL, SCHOOLS_URL, PROPERTY_KEYS, MAX_DISTRICTS, INITIAL_DISTRICTS, districtColors, BASE62_CHARS
+  GEOJSON_URL, SCHOOLS_URL, PROPERTY_KEYS, MAX_DISTRICTS, INITIAL_DISTRICTS, districtColors, BASE62_CHARS, SCHOOL_TYPE_COLORS
 } from './constants';
 import LeftSidebar from './components/LeftSidebar';
 import RightSidebar from './components/RightSidebar';
@@ -18,29 +18,6 @@ import ReportComponent from './components/ReportComponent';
 import HelpModal from './components/HelpModal';
 import SplashScreen from './components/SplashScreen';
 import type { Map } from 'leaflet';
-
-// Define the ReportData type, as it's now used in this file
-interface ReportData {
-  id: string;
-  name: string;
-  color: string;
-  adm: number;
-  grandList: number;
-  homeEEdGL: number;
-  nonHomeEEdGL: number;
-  totalEEdGL: number;
-  townCount: number;
-  enrollCategory: { small: number; medium: number; large: number; };
-  independentEnrollCategory: { small: number; medium: number; large: number; };
-  independentSchoolCount: number;
-  pcbAboveSALCount: number;
-  fciCounts: { good: number; fair: number; poor: number; veryPoor: number; };
-  townsWithAdm: { name: string; adm: number; county: string; totalEEdGL: number; Home_E_Ed_GL: number; NonHome_E_Ed_GL: number; SqMi: number; }[];
-  publicSchools: any[];
-  independentSchools: any[];
-  suStatus: { intact: string[], broken: string[] };
-  rpcStatus: { intact: string[], broken: string[] };
-}
 
 const DISCLAIMER_VERSION = '1.0'; // Version for the disclaimer acknowledgment
 
@@ -78,6 +55,11 @@ const App: React.FC = () => {
   const [schoolDetails, setSchoolDetails] = useState<SchoolDetailsByTown>({});
   const [independentSchoolDetails, setIndependentSchoolDetails] = useState<SchoolDetailsByTown>({});
   const [districtOrder, setDistrictOrder] = useState<number[]>(() => Array.from({ length: INITIAL_DISTRICTS }, (_, i) => i + 1));
+  const [schoolsData, setSchoolsData] = useState<SchoolPointFeature[]>([]);
+  const [showSchools, setShowSchools] = useState<boolean>(false);
+  const [schoolTypeFilters, setSchoolTypeFilters] = useState<SchoolTypeFilters>(
+    Object.keys(SCHOOL_TYPE_COLORS).reduce((acc, key) => ({ ...acc, [key]: true }), {})
+  );
 
   const [activeDistrict, setActiveDistrict] = useState<number>(1);
   const [mapName, setMapName] = useState<string>('');
@@ -99,6 +81,13 @@ const App: React.FC = () => {
 
   const modalRoot = document.getElementById('modal-root');
 
+  const handleSchoolFilterChange = (schoolType: string) => {
+    setSchoolTypeFilters(prev => ({
+      ...prev,
+      [schoolType]: !prev[schoolType]
+    }));
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => {
       mapRef.current?.invalidateSize();
@@ -119,7 +108,7 @@ const App: React.FC = () => {
         }
         
         const geojsonData: TownGeoJSON = await geojsonResponse.json();
-        const schoolsData = await schoolsResponse.json();
+        const schoolsDataResponse = await schoolsResponse.json();
         
         const newTownData: TownData = {};
         const newAssignments: Assignments = {};
@@ -144,27 +133,50 @@ const App: React.FC = () => {
         setSupervisoryUnions(newSUs);
         setTownGeoJSON(geojsonData);
 
+        const newSchoolPoints: SchoolPointFeature[] = schoolsDataResponse.features
+          .filter((f: any) => f.geometry && f.geometry.coordinates && f.geometry.coordinates.length === 2)
+          .map((feature: any) => {
+            const [longitude, latitude] = feature.geometry.coordinates;
+            return {
+              type: 'Feature',
+              geometry: feature.geometry,
+              properties: {
+                ...feature.properties,
+                longitude,
+                latitude,
+              },
+            };
+          });
+        setSchoolsData(newSchoolPoints);
+
         const newSchoolDetails: SchoolDetailsByTown = {};
         const newIndependentSchoolDetails: SchoolDetailsByTown = {};
 
-        schoolsData.features.forEach((schoolFeature: any) => {
+        schoolsDataResponse.features.forEach((schoolFeature: any) => {
             const attrs = schoolFeature.properties;
             const townName = attrs.town?.toUpperCase();
 
-            if (attrs.Status === 'OPEN' && townName) {
+            if (townName) {
+                const schoolDetail: SchoolDetail = {
+                    NAME: attrs.School, Grades: attrs.Grades, ENROLLMENT: attrs.Enrollment || 0,
+                    TOWN: attrs.town, Type: attrs.Type, yearBuilt: attrs.yearBuilt,
+                    fciCategory: attrs.fciCategory, enrollYear: attrs.enrollYear, PCB_Cat: attrs.PCB_Cat,
+                    '2014Enroll': attrs['2014Enroll'], '2015Enroll': attrs['2015Enroll'],
+                    '2016Enroll': attrs['2016Enroll'], '2017Enroll': attrs['2017Enroll'],
+                    '2018Enroll': attrs['2018Enroll'], '2019Enroll': attrs['2019Enroll'],
+                    '2020Enroll': attrs['2020Enroll'], '2021Enroll': attrs['2021Enroll'],
+                    '2022Enroll': attrs['2022Enroll'],
+                    accessType: attrs.accessType,
+                    latitude: schoolFeature.geometry?.coordinates[1],
+                    longitude: schoolFeature.geometry?.coordinates[0]
+                };
+
                 if (attrs.accessType === 'Public') {
                     if (!newSchoolDetails[townName]) newSchoolDetails[townName] = [];
-                    newSchoolDetails[townName].push({
-                        NAME: attrs.School, Grades: attrs.Grades, ENROLLMENT: attrs.Enrollment,
-                        TOWN: attrs.town, Type: attrs.Type, yearBuilt: attrs.yearBuilt,
-                        fciCategory: attrs.fciCategory, enrollYear: attrs.enrollYear, PCB_Cat: attrs.PCB_Cat
-                    });
+                    newSchoolDetails[townName].push(schoolDetail);
                 } else if (attrs.accessType === 'Independent') {
                     if (!newIndependentSchoolDetails[townName]) newIndependentSchoolDetails[townName] = [];
-                    newIndependentSchoolDetails[townName].push({
-                        NAME: attrs.School, TOWN: attrs.town, Type: attrs.Type,
-                        Notes: attrs.Notes, Grades: attrs.Grades, ENROLLMENT: attrs.Enrollment || 0
-                    });
+                    newIndependentSchoolDetails[townName].push(schoolDetail);
                 }
             }
         });
@@ -563,7 +575,7 @@ const App: React.FC = () => {
   }, [generateShareableString]);
 
   const exportAssignmentsToCsv = useCallback(() => {
-    let csvContent = "TOWNNAME,COUNTY,DISTRICT_ID,DISTRICT_NAME,PUBLIC_SCHOOL_STUDENTS,Public_Schools,Total_E_Ed_GL\r\n";
+    let csvContent = "TOWNNAME,COUNTY,DISTRICT_ID,DISTRICT_NAME,PUBLIC_SCHOOL_STUDENTS,Public_Schools,Total_E_Ed_GL_Act73\r\n";
     const allTowns = Object.keys(townData).sort();
     allTowns.forEach(townId => {
         const districtId = assignments[townId];
@@ -614,15 +626,38 @@ const App: React.FC = () => {
                   name: townName,
                   adm: townProps?.['Public_School_Students'] || 0,
                   county: townProps?.County || 'N/A',
-                  totalEEdGL: townProps?.Total_E_Ed_GL || 0,
-                  Home_E_Ed_GL: townProps?.Home_E_Ed_GL || 0,
-                  NonHome_E_Ed_GL: townProps?.NonHome_E_Ed_GL || 0,
+                  totalEEdGL: townProps?.Total_E_Ed_GL_Act73 || 0,
+                  Home_E_Ed_GL_Act73: townProps?.Home_E_Ed_GL_Act73 || 0,
+                  NonHome_E_Ed_GL_Act73: townProps?.NonHome_E_Ed_GL_Act73 || 0,
                   SqMi: townProps?.SqMi || 0,
               };
           });
 
           const publicSchoolsInDistrict = stats.towns.flatMap(townName => schoolDetails[townName.toUpperCase()] || []);
           const independentSchoolsInDistrict = stats.towns.flatMap(townName => independentSchoolDetails[townName.toUpperCase()] || []);
+
+          // Aggregate historical enrollment for the sparkline
+          const enrollmentHistory: { year: string; enrollment: number }[] = [];
+          const years = ['2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2024']; // Using 2024 for current FY25
+          const yearKeys: (keyof SchoolDetail)[] = ['2014Enroll', '2015Enroll', '2016Enroll', '2017Enroll', '2018Enroll', '2019Enroll', '2020Enroll', '2021Enroll', '2022Enroll', 'ENROLLMENT'];
+          const yearlyTotals: { [year: string]: number } = {};
+
+          publicSchoolsInDistrict.forEach(school => {
+              yearKeys.forEach((key, index) => {
+                  const year = years[index];
+                  if (!yearlyTotals[year]) {
+                      yearlyTotals[year] = 0;
+                  }
+                  const enrollmentValue = school[key];
+                  if (typeof enrollmentValue === 'number') {
+                      yearlyTotals[year] += enrollmentValue;
+                  }
+              });
+          });
+
+          for (const year of years) {
+              enrollmentHistory.push({ year: year, enrollment: yearlyTotals[year] || 0 });
+          }
 
           const enrollCategory = { small: 0, medium: 0, large: 0 };
           publicSchoolsInDistrict.forEach(school => {
@@ -653,20 +688,20 @@ const App: React.FC = () => {
 
           const { homeEEdGL, nonHomeEEdGL, totalEEdGL } = stats.towns.reduce((acc, townName) => {
               const townProps = townData[townName];
-              acc.homeEEdGL += townProps?.Home_E_Ed_GL || 0;
-              acc.nonHomeEEdGL += townProps?.NonHome_E_Ed_GL || 0;
-              acc.totalEEdGL += townProps?.Total_E_Ed_GL || 0;
+              acc.homeEEdGL += townProps?.Home_E_Ed_GL_Act73 || 0;
+              acc.nonHomeEEdGL += townProps?.NonHome_E_Ed_GL_Act73 || 0;
+              acc.totalEEdGL += townProps?.Total_E_Ed_GL_Act73 || 0;
               return acc;
           }, { homeEEdGL: 0, nonHomeEEdGL: 0, totalEEdGL: 0 });
 
-          const suStatus = { intact: [] as string[], broken: [] as string[] };
-          const rpcStatus = { intact: [] as string[], broken: [] as string[] };
+          const suStatus = { intact: [] as string[], divided: [] as string[] };
+          const rpcStatus = { intact: [] as string[], divided: [] as string[] };
           
           const districtSUs = [...new Set(stats.towns.map(t => townData[t].Supervisory_Union))];
           districtSUs.forEach(su => {
               const allTownsInSU = supervisoryUnions[su]?.towns || [];
               const isIntact = allTownsInSU.every(t => assignments[t] === id);
-              if (isIntact) suStatus.intact.push(su); else suStatus.broken.push(su);
+              if (isIntact) suStatus.intact.push(su); else suStatus.divided.push(su);
           });
           
           const districtRPCs = [...new Set(stats.towns.map(t => townData[t].RPC))];
@@ -679,12 +714,13 @@ const App: React.FC = () => {
           districtRPCs.forEach(rpc => {
               const allTownsInRPC = allTownsByRPC[rpc] || [];
               const isIntact = allTownsInRPC.every(t => assignments[t] === id);
-              if (isIntact) rpcStatus.intact.push(rpc); else rpcStatus.broken.push(rpc);
+              if (isIntact) rpcStatus.intact.push(rpc); else rpcStatus.divided.push(rpc);
           });
 
           return {
               id: `dist_${id}`, name: districtName, color: districtColors[id - 1], adm: stats.studentTotal,
               grandList: stats.totalGL, homeEEdGL, nonHomeEEdGL, totalEEdGL, townCount: stats.townCount,
+              enrollmentHistory, // Add the new property
               enrollCategory, independentEnrollCategory, independentSchoolCount: independentSchoolsInDistrict.length,
               pcbAboveSALCount, fciCounts, townsWithAdm,
               publicSchools: publicSchoolsInDistrict.map(school => ({ ...school, id: `sch_pub_${school.NAME.replace(/\s+/g, '_')}_${Math.random()}` })),
@@ -893,6 +929,11 @@ const App: React.FC = () => {
                       hoveredDistrict={hoveredDistrict}
                       hoveredSU={hoveredSU}
                       onMapReady={(map) => { mapRef.current = map; }}
+                      schoolsData={schoolsData}
+                      showSchools={showSchools}
+                      onToggleSchools={() => setShowSchools(prev => !prev)}
+                      schoolTypeFilters={schoolTypeFilters}
+                      onSchoolFilterChange={handleSchoolFilterChange}
                   />
               </main>
               <div className={`transition-all duration-300 ease-in-out h-full ${isLeftSidebarCollapsed ? 'w-2/5' : 'w-1/2'}`}>

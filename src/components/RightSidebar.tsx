@@ -234,7 +234,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
                                 </span>
                             </div>
                             <div className="flex justify-between items-baseline text-xs text-gray-500 mt-1">
-                                <span>Grand List Value per Student: {formattedGlPerStudent}</span>
+                                <span>Proj 2025 Grand List per Student: {formattedGlPerStudent}</span>
                             </div>
                             <div className="mt-1 flex items-baseline gap-2">
                                <span className="text-xs text-gray-500 flex-shrink-0">Towns:</span>

@@ -1,30 +1,7 @@
 // src/components/ReportComponent.tsx
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import type { SchoolDetail } from '../types'; 
-
-// Define the structure of the data this component expects
-interface ReportData {
-  id: string;
-  name: string;
-  color: string;
-  adm: number;
-  grandList: number;
-  homeEEdGL: number;
-  nonHomeEEdGL: number;
-  totalEEdGL: number;
-  townCount: number;
-  enrollCategory: { small: number; medium: number; large: number; };
-  independentEnrollCategory: { small: number; medium: number; large: number; };
-  independentSchoolCount: number;
-  pcbAboveSALCount: number;
-  fciCounts: { good: number; fair: number; poor: number; veryPoor: number; };
-  townsWithAdm: { name: string; adm: number; county: string; totalEEdGL: number; Home_E_Ed_GL: number; NonHome_E_Ed_GL: number; SqMi: number; }[];
-  publicSchools: (SchoolDetail & { id: string; fciCategory?: string })[];
-  independentSchools: (SchoolDetail & { id: string; })[];
-  suStatus: { intact: string[], broken: string[] };
-  rpcStatus: { intact: string[], broken: string[] };
-}
+import type { ReportData } from '../types'; 
 
 interface ReportComponentProps {
   reportData: ReportData[];
@@ -44,6 +21,30 @@ const XIcon = () => <span className="text-red-500">✕</span>;
 
 
 // --- Reusable Sub-Components ---
+
+const ChangeIndicator: React.FC<{ data: { year: string; value: number }[] }> = ({ data }) => {
+    if (!data || data.length < 2) return <div className="text-center text-xs text-gray-400">N/A</div>;
+
+    const firstValue = data[0].value;
+    const lastValue = data[data.length - 1].value;
+
+    const percentageChange = firstValue > 0 ? ((lastValue - firstValue) / firstValue) * 100 : (lastValue > 0 ? 100 : 0);
+
+    const isIncrease = percentageChange > 0.1;
+    const isDecrease = percentageChange < -0.1;
+    const changeColor = isIncrease ? 'text-green-600' : isDecrease ? 'text-red-600' : 'text-gray-500';
+    const Arrow = isIncrease ? '▲' : isDecrease ? '▼' : '▬';
+
+    return (
+        <div className="flex items-center justify-center w-full h-full px-2">
+            <div className={`flex items-center font-semibold ${changeColor}`}>
+                <span className="text-lg">{Arrow}</span>
+                <span className="text-sm ml-1">{Math.abs(percentageChange).toFixed(1)}%</span>
+            </div>
+        </div>
+    );
+};
+
 
 const DataBar: React.FC<{ value: number; maxValue: number; color: string }> = ({ value, maxValue, color }) => {
   const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
@@ -124,14 +125,14 @@ const DistrictProfileCard = ({ district }: { district: ReportData & { grandListP
     const sqMiFormatter = (value: number) => value ? value.toFixed(2) : '0.00';
 
     const townTotals = React.useMemo(() => {
-        if (!district || !district.townsWithAdm) return { adm: 0, Home_E_Ed_GL: 0, NonHome_E_Ed_GL: 0, SqMi: 0 };
+        if (!district || !district.townsWithAdm) return { adm: 0, Home_E_Ed_GL_Act73: 0, NonHome_E_Ed_GL_Act73: 0, SqMi: 0 };
         return district.townsWithAdm.reduce((acc, town) => {
             acc.adm += town.adm;
-            acc.Home_E_Ed_GL += town.Home_E_Ed_GL;
-            acc.NonHome_E_Ed_GL += town.NonHome_E_Ed_GL;
+            acc.Home_E_Ed_GL_Act73 += town.Home_E_Ed_GL_Act73;
+            acc.NonHome_E_Ed_GL_Act73 += town.NonHome_E_Ed_GL_Act73;
             acc.SqMi += town.SqMi;
             return acc;
-        }, { adm: 0, Home_E_Ed_GL: 0, NonHome_E_Ed_GL: 0, SqMi: 0 });
+        }, { adm: 0, Home_E_Ed_GL_Act73: 0, NonHome_E_Ed_GL_Act73: 0, SqMi: 0 });
     }, [district]);
 
     const sortedTowns = React.useMemo(() => {
@@ -211,12 +212,12 @@ const DistrictProfileCard = ({ district }: { district: ReportData & { grandListP
               <div>
                 <h4 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Supervisory Union Status</h4>
                 <p className="text-sm text-gray-600">Intact: {district.suStatus.intact.length}</p>
-                <p className="text-sm text-gray-600">Broken: {district.suStatus.broken.length}</p>
+                <p className="text-sm text-gray-600">Divided: {district.suStatus.divided.length}</p>
               </div>
               <div>
                 <h4 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Regional Planning Commission Status</h4>
                 <p className="text-sm text-gray-600">Intact: {district.rpcStatus.intact.length}</p>
-                <p className="text-sm text-gray-600">Broken: {district.rpcStatus.broken.length}</p>
+                <p className="text-sm text-gray-600">Divided: {district.rpcStatus.divided.length}</p>
               </div>
             </div>
             <div className="mt-8 space-y-8">
@@ -228,18 +229,18 @@ const DistrictProfileCard = ({ district }: { district: ReportData & { grandListP
                                 <tr>
                                     <th className="px-4 py-2"><button onClick={() => requestSort('name', 'towns')} className="flex items-center font-semibold py-1">Town {getSortIcon('name', 'towns')}</button></th>
                                     <th className="px-4 py-2 text-right"><button onClick={() => requestSort('adm', 'towns')} className="flex items-center font-semibold w-full justify-end py-1">ADM {getSortIcon('adm', 'towns')}</button></th>
-                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('Home_E_Ed_GL', 'towns')} className="flex items-center font-semibold w-full justify-end py-1">Home Eq Ed GL {getSortIcon('Home_E_Ed_GL', 'towns')}</button></th>
-                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('NonHome_E_Ed_GL', 'towns')} className="flex items-center font-semibold w-full justify-end py-1">Non-Home Eq Ed GL {getSortIcon('NonHome_E_Ed_GL', 'towns')}</button></th>
+                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('Home_E_Ed_GL_Act73', 'towns')} className="flex items-center font-semibold w-full justify-end py-1">Home Eq Ed GL {getSortIcon('Home_E_Ed_GL_Act73', 'towns')}</button></th>
+                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('NonHome_E_Ed_GL_Act73', 'towns')} className="flex items-center font-semibold w-full justify-end py-1">Non-Home Eq Ed GL {getSortIcon('NonHome_E_Ed_GL_Act73', 'towns')}</button></th>
                                     <th className="px-4 py-2 text-right"><button onClick={() => requestSort('SqMi', 'towns')} className="flex items-center font-semibold w-full justify-end py-1">Sq. Mi. {getSortIcon('SqMi', 'towns')}</button></th>
                                 </tr>
                             </thead>
-                            <tbody>{sortedTowns.map(town => (<tr key={town.name} className="border-t border-gray-200 dark:border-gray-700"><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{town.name}</td><td className="px-4 py-2 text-right">{numberFormatter(town.adm)}</td><td className="px-4 py-2 text-right">{currencyFormatter(town.Home_E_Ed_GL)}</td><td className="px-4 py-2 text-right">{currencyFormatter(town.NonHome_E_Ed_GL)}</td><td className="px-4 py-2 text-right">{sqMiFormatter(town.SqMi)}</td></tr>))}</tbody>
+                            <tbody>{sortedTowns.map(town => (<tr key={town.name} className="border-t border-gray-200 dark:border-gray-700"><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{town.name}</td><td className="px-4 py-2 text-right">{numberFormatter(town.adm)}</td><td className="px-4 py-2 text-right">{currencyFormatter(town.Home_E_Ed_GL_Act73)}</td><td className="px-4 py-2 text-right">{currencyFormatter(town.NonHome_E_Ed_GL_Act73)}</td><td className="px-4 py-2 text-right">{sqMiFormatter(town.SqMi)}</td></tr>))}</tbody>
                             <tfoot className="bg-gray-100 dark:bg-gray-700 font-semibold text-gray-800 dark:text-gray-200">
                                 <tr className="border-t-2 border-gray-300 dark:border-gray-600">
                                     <td className="px-4 py-2">Totals</td>
                                     <td className="px-4 py-2 text-right">{numberFormatter(townTotals.adm)}</td>
-                                    <td className="px-4 py-2 text-right">{currencyFormatter(townTotals.Home_E_Ed_GL)}</td>
-                                    <td className="px-4 py-2 text-right">{currencyFormatter(townTotals.NonHome_E_Ed_GL)}</td>
+                                    <td className="px-4 py-2 text-right">{currencyFormatter(townTotals.Home_E_Ed_GL_Act73)}</td>
+                                    <td className="px-4 py-2 text-right">{currencyFormatter(townTotals.NonHome_E_Ed_GL_Act73)}</td>
                                     <td className="px-4 py-2 text-right">{sqMiFormatter(townTotals.SqMi)}</td>
                                 </tr>
                             </tfoot>
@@ -296,11 +297,18 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
 
     const processedData = React.useMemo(() => {
         if (!reportData) return [];
-        return reportData.map(d => ({
-            ...d,
-            grandListPerStudent: d.adm > 0 ? d.grandList / d.adm : 0,
-            numSchools: d.publicSchools ? d.publicSchools.length : 0
-        }));
+        return reportData.map(d => {
+            const firstValue = d.enrollmentHistory[0]?.enrollment || 0;
+            const lastValue = d.enrollmentHistory[d.enrollmentHistory.length - 1]?.enrollment || 0;
+            const enrollmentChangePercentage = firstValue > 0 ? ((lastValue - firstValue) / firstValue) * 100 : (lastValue > 0 ? 100 : 0);
+            
+            return {
+                ...d,
+                grandListPerStudent: d.adm > 0 ? d.grandList / d.adm : 0,
+                numSchools: d.publicSchools ? d.publicSchools.length : 0,
+                enrollmentChangePercentage: enrollmentChangePercentage
+            };
+        });
     }, [reportData]);
     
     const maxValues = React.useMemo(() => {
@@ -324,8 +332,17 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
         let sortableItems = [...processedData];
         if (sortConfig !== null) {
             sortableItems.sort((a, b) => {
-                const valA = (a as any)[sortConfig.key] || 0;
-                const valB = (b as any)[sortConfig.key] || 0;
+                const key = sortConfig.key as keyof typeof a;
+                let valA: any, valB: any;
+
+                if (key === 'enrollmentHistory') {
+                    valA = a.enrollmentChangePercentage;
+                    valB = b.enrollmentChangePercentage;
+                } else {
+                    valA = a[key] || 0;
+                    valB = b[key] || 0;
+                }
+
                 if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
                 if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
                 return 0;
@@ -347,9 +364,8 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
     
     const overviewTableHeaders = [
         { key: 'name', label: 'District Name' },
-        { key: 'townCount', label: 'Towns' },
         { key: 'adm', label: 'ADM' },
-        { key: 'grandListPerStudent', label: 'GL / Student' },
+        { key: 'enrollmentHistory', label: '10-Year Change' },
         { key: 'totalEEdGL', label: 'Total Eq Ed GL' },
         { key: 'enrollCategory', label: 'Public Schools by Size'},
         { key: 'independentSchoolCount', label: 'Ind. Schools by Size' },
@@ -357,7 +373,6 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
         { key: 'suStatus', label: 'SU INTACT' },
     ];
 
-    const currencyMillionFormatter = (value: number) => `$${(Math.round((value || 0) / 100000) / 10).toFixed(1)}M`;
     const currencyBillionFormatter = (value: number) => `$${(Math.round((value || 0) / 100000000) / 10).toFixed(1)}B`;
     const numberFormatter = (value: number) => value ? value.toLocaleString() : '0';
     const fullCurrencyFormatter = (value: number) => `$${Math.round(value || 0).toLocaleString()}`;
@@ -394,7 +409,7 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
                         <h2 className="text-3xl font-semibold pb-1 border-b-2 border-gray-300 mb-6" style={{ color: '#003300' }}>District Overview</h2>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Average Daily Membership (FY25)</h3><ResponsiveContainer width="100%" height={300}><BarChart data={processedData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.2)" /><XAxis dataKey="name" tick={{ fill: '#6b7280' }} fontSize={12} interval={0} angle={-20} textAnchor="end" height={60} /><YAxis tick={{ fill: '#6b7280' }} tickFormatter={numberFormatter} /><Tooltip content={<CustomTooltip formatter={numberFormatter} />} cursor={{fill: 'rgba(239, 246, 255, 0.5)'}} /><Bar dataKey="adm" name="ADM" radius={[4, 4, 0, 0]}>{processedData.map((entry) => (<Cell key={`cell-${entry.id}`} fill={entry.color || '#8884d8'} />))}</Bar></BarChart></ResponsiveContainer></div>
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Grand List per Student (2024)</h3><ResponsiveContainer width="100%" height={300}><BarChart data={processedData} margin={{ top: 5, right: 20, left: 50, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.2)" /><XAxis dataKey="name" tick={{ fill: '#6b7280' }} fontSize={12} interval={0} angle={-20} textAnchor="end" height={60} /><YAxis tick={{ fill: '#6b7280' }} tickFormatter={fullCurrencyFormatter} /><Tooltip content={<CustomTooltip formatter={fullCurrencyFormatter} />} cursor={{fill: 'rgba(239, 246, 255, 0.5)'}} /><Bar dataKey="grandListPerStudent" name="GL / Student" radius={[4, 4, 0, 0]}>{processedData.map((entry) => (<Cell key={`cell-${entry.id}`} fill={entry.color || '#82ca9d'} />))}</Bar></BarChart></ResponsiveContainer></div>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Grand List per Student (2025-Projected)</h3><ResponsiveContainer width="100%" height={300}><BarChart data={processedData} margin={{ top: 5, right: 20, left: 50, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.2)" /><XAxis dataKey="name" tick={{ fill: '#6b7280' }} fontSize={12} interval={0} angle={-20} textAnchor="end" height={60} /><YAxis tick={{ fill: '#6b7280' }} tickFormatter={fullCurrencyFormatter} /><Tooltip content={<CustomTooltip formatter={fullCurrencyFormatter} />} cursor={{fill: 'rgba(239, 246, 255, 0.5)'}} /><Bar dataKey="grandListPerStudent" name="GL / Student" radius={[4, 4, 0, 0]}>{processedData.map((entry) => (<Cell key={`cell-${entry.id}`} fill={entry.color || '#82ca9d'} />))}</Bar></BarChart></ResponsiveContainer></div>
                         </div>
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
                             <div className="p-6"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">District Data Table</h3><p className="text-sm text-gray-500 dark:text-gray-400">Click headers to sort.</p></div>
@@ -416,14 +431,17 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
                                         {sortedTableData.map((item) => (
                                             <tr key={item.id} className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
                                                 <td className="px-6 py-4 font-medium" style={{ color: item.color }}>{item.name}</td>
-                                                <td className="px-6 py-4"><div className="text-center">{numberFormatter(item.townCount)}</div><DataBar value={item.townCount} maxValue={maxValues.townCount} color={item.color} /></td>
                                                 <td className="px-6 py-4"><div>{numberFormatter(item.adm)}</div><DataBar value={item.adm} maxValue={maxValues.adm} color={item.color} /></td>
-                                                <td className="px-6 py-4"><div>{currencyMillionFormatter(item.grandListPerStudent)}</div><DataBar value={item.grandListPerStudent} maxValue={maxValues.grandListPerStudent} color={item.color} /></td>
+                                                <td className="px-6 py-4 w-48">
+                                                    <ChangeIndicator
+                                                        data={item.enrollmentHistory.map(d => ({ year: d.year, value: d.enrollment }))}
+                                                    />
+                                                </td>
                                                 <td className="px-6 py-4"><div>{currencyBillionFormatter(item.totalEEdGL)}</div><DataBar value={item.totalEEdGL} maxValue={maxValues.totalEEdGL} color={item.color} /></td>
                                                 <td className="px-6 py-4"><SchoolSizeChart data={item.enrollCategory} max={maxValues.schoolSize} /></td>
                                                 <td className="px-6 py-4"><SchoolSizeChart data={item.independentEnrollCategory} max={maxValues.schoolSize} /></td>
                                                 <td className="px-6 py-4"><FciChart data={item.fciCounts} /></td>
-                                                <td className="px-6 py-4 text-center"><div title={`Intact: ${item.suStatus.intact.join(', ')}\nBroken: ${item.suStatus.broken.join(', ')}`}><CheckIcon /> {item.suStatus.intact.length} <XIcon /> {item.suStatus.broken.length}</div></td>
+                                                <td className="px-6 py-4 text-center"><div title={`Intact: ${item.suStatus.intact.join(', ')}\nDivided: ${item.suStatus.divided.join(', ')}`}><CheckIcon /> {item.suStatus.intact.length} <XIcon /> {item.suStatus.divided.length}</div></td>
                                             </tr>
                                         ))}
                                     </tbody>
