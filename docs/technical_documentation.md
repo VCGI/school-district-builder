@@ -162,3 +162,13 @@ The application is hosted as a **Static Web App** in **Azure Blob Storage**.
 3.  **Upload Build Artifacts**:
     -   **Upload the entire contents** of the local `dist` folder into the target folder within the `$web` container (e.g., `/education/district-builder/`).
     -   Ensure all files, including subdirectories, are uploaded while maintaining their structure.
+
+## Future Development & Refactoring
+
+While the current architecture serves the application's needs effectively, future development could benefit from refactoring a few key areas to enhance scalability and maintainability:
+
+* **Centralized State Management**: The main `App.tsx` component currently manages the majority of the application's state. To simplify future feature additions, a more robust state management solution could be implemented. Migrating state logic to React's Context API or a lightweight library like Zustand would reduce the need to pass props and callbacks through multiple component layers (prop drilling).
+
+* **Separation of Logic**: Some of the complex data manipulation (e.g., calculating district statistics, serializing data for URLs) could be extracted from the UI components and moved into dedicated custom hooks or utility functions. This would make the components themselves simpler and purely focused on presenting the user interface, improving testability and readability.
+
+These changes would make the codebase more modular and easier for developers to contribute to in the future.
