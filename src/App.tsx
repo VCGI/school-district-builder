@@ -99,7 +99,7 @@ const App: React.FC = () => {
     const loadAllData = async () => {
       try {
         const [geojsonResponse, schoolsResponse] = await Promise.all([
-            fetch(GEOJSON_URL),
+            fetch(`${GEOJSON_URL}?_=${new Date().getTime()}`),
             fetch(SCHOOLS_URL)
         ]);
 
