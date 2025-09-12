@@ -25,9 +25,9 @@ export const SCHOOL_TYPE_COLORS: { [key: string]: string } = {
     'Middle School': '#248dc1',
     'K-12': '#510c76',
     'CTE': '#ee7624',
-    'Independent': '#cccccc'
+    'Independent (Eligible)': '#cccccc'
 };
 
 export const BASE62_CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-export const SCHOOLS_URL = 'https://s3.us-east-2.amazonaws.com/vtopendata-prd/_Other/Education/schools_all.json';
+export const SCHOOLS_URL = 'https://s3.us-east-2.amazonaws.com/vtopendata-prd/_Other/Education/schools_all_v03.json';

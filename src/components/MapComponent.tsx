@@ -181,7 +181,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
             const div = L.DomUtil.create('div', 'school-legend');
             const types = SCHOOL_TYPE_COLORS;
             const enrollments = [50, 250, 750];
-            const legendOrder = ['Elementary', 'Middle School', 'Secondary', 'K-12', 'CTE', 'Independent'];
+            const legendOrder = ['Elementary', 'Middle School', 'Secondary', 'K-12', 'CTE', 'Independent (Eligible)'];
 
             let content = '<h4>School Type</h4><div class="legend-section">';
             legendOrder.forEach(key => {
@@ -227,8 +227,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
         schoolsLayerRef.current.clearLayers();
         
         const filteredSchools = schoolsData.filter(school => {
-            const type = school.properties.accessType === 'Independent' ? 'Independent' : school.properties.Type;
-            return schoolTypeFilters[type];
+            const props = school.properties;
+            let type;
+            if (props.accessType === 'Independent') {
+                if (props.Notes === 'Approved - Eligible for Public Funding') {
+                    type = 'Independent (Eligible)';
+                }
+            } else {
+                type = props.Type;
+            }
+            return type ? schoolTypeFilters[type] : false;
         });
 
         const sortedSchools = [...filteredSchools].sort((a, b) => (b.properties.Enrollment || 0) - (a.properties.Enrollment || 0));
@@ -236,7 +244,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         sortedSchools.forEach(school => {
             const { latitude, longitude, Type, accessType, Enrollment } = school.properties;
             if (latitude && longitude) {
-                const color = accessType === 'Independent' ? SCHOOL_TYPE_COLORS['Independent'] : SCHOOL_TYPE_COLORS[Type] || '#808080';
+                const color = accessType === 'Independent' ? SCHOOL_TYPE_COLORS['Independent (Eligible)'] : SCHOOL_TYPE_COLORS[Type] || '#808080';
                 const enrollment = Enrollment || 0;
                 const radius = 3 + Math.sqrt(enrollment) / 3;
 

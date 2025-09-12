@@ -297,7 +297,7 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
                             ) : <p className="text-gray-500 text-xs">No open public schools listed in this district's towns.</p>}
 
                             {/* Independent Schools Section */}
-                            <h4 className="font-bold mb-2 text-sm mt-4">Independent Schools in District ({independentSchoolsInDistrict.length})</h4>
+                            <h4 className="font-bold mb-2 text-sm mt-4">Independent (Eligible) Schools in District ({independentSchoolsInDistrict.length})</h4>
                             {independentSchoolsInDistrict.length > 0 ? (
                                 <div className="space-y-3 text-xs pr-2">
                                     {sortedIndependentSchoolTypes.map(schoolType => {

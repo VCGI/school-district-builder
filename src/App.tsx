@@ -174,7 +174,7 @@ const App: React.FC = () => {
                 if (attrs.accessType === 'Public') {
                     if (!newSchoolDetails[townName]) newSchoolDetails[townName] = [];
                     newSchoolDetails[townName].push(schoolDetail);
-                } else if (attrs.accessType === 'Independent') {
+                } else if (attrs.accessType === 'Independent' && attrs.Notes === 'Approved - Eligible for Public Funding') {
                     if (!newIndependentSchoolDetails[townName]) newIndependentSchoolDetails[townName] = [];
                     newIndependentSchoolDetails[townName].push(schoolDetail);
                 }

@@ -127,6 +127,9 @@ const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
                     <li>
                         School data was compiled from the Agency of Education, the Joint Fiscal Office, and the National Center for Education Statistics. Town level student data is derived from Average Daily Membership by Resident District for FY25 as published by the Vermont Agency of Education (<a href="https://education.vermont.gov/sites/aoe/files/documents/edu-average-daily-membership-by-resident-district-fy25.xlsx" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">link</a>)
                     </li>
+                    <li>
+                        Independent Schools included in the application are those that meet the Act 73 criteria to be Eligible to Receive Public Tuition (<a href="https://education.vermont.gov/src/doc/content/independent-schools" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">link</a>)
+                    </li>
                 </ul>
             </div>
           )}

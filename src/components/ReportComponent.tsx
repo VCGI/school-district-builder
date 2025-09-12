@@ -267,7 +267,7 @@ const DistrictProfileCard = ({ district }: { district: ReportData & { grandListP
                     </div>
                 </div>
                  <div>
-                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Independent Schools ({district.independentSchools.length})</h4>
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">Independent Schools - Public Tuition Eligible ({district.independentSchools.length})</h4>
                     <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
                         <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
                             <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400">

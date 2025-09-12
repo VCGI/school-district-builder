@@ -57,7 +57,9 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
       <div className={`flex flex-col h-full overflow-hidden transition-opacity duration-300 ${isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <div style={{ backgroundColor: '#003300' }} className="px-4 py-2 flex items-center justify-start text-white flex-shrink-0">
-          <img src="https://files.vcgi.vermont.gov/logo/vermont-logo-white.png" alt="State of Vermont" style={{ height: '18px', width: 'auto' }} />
+          <a href="https://map.vermont.gov/education/" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity">
+            <img src="https://files.vcgi.vermont.gov/logo/vermont-logo-white.png" alt="State of Vermont" style={{ height: '18px', width: 'auto' }} />
+          </a>
         </div>
         <div className="p-4 border-b flex-shrink-0">
           <h1 className="text-xl font-bold">School District Builder</h1>
