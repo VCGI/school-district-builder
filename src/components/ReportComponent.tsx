@@ -1,7 +1,7 @@
 // src/components/ReportComponent.tsx
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import type { ReportData } from '../types'; 
+import type { ReportData } from '../types';
 
 interface ReportComponentProps {
   reportData: ReportData[];
@@ -55,27 +55,41 @@ const DataBar: React.FC<{ value: number; maxValue: number; color: string }> = ({
   );
 };
 
-const SchoolSizeChart: React.FC<{ data: { small: number; medium: number; large: number; }, max: number }> = ({ data, max }) => {
-  const total = data.small + data.medium + data.large;
-  if (total === 0) return <div className="text-center text-xs text-gray-400">N/A</div>;
-  
-  return (
-    <div className="flex items-end justify-around h-16 w-24 mx-auto" title={`Small (<150): ${data.small}\nMedium (150-500): ${data.medium}\nLarge (>500): ${data.large}`}>
-      <div className="flex flex-col items-center justify-end h-full w-1/3">
-        <div className="bg-gray-300 rounded-sm w-full" style={{ height: `${(data.small / max) * 100}%` }}></div>
-        <span className="text-xs mt-1">S</span>
-      </div>
-      <div className="flex flex-col items-center justify-end h-full w-1/3 mx-1">
-        <div className="bg-gray-400 rounded-sm w-full" style={{ height: `${(data.medium / max) * 100}%` }}></div>
-        <span className="text-xs mt-1">M</span>
-      </div>
-      <div className="flex flex-col items-center justify-end h-full w-1/3">
-        <div className="bg-gray-500 rounded-sm w-full" style={{ height: `${(data.large / max) * 100}%` }}></div>
-        <span className="text-xs mt-1">L</span>
-      </div>
-    </div>
-  );
+const SchoolTypeChart: React.FC<{ data: { [key: string]: number }; max: number; isIndependent?: boolean }> = ({ data, max, isIndependent = false }) => {
+    const publicSchoolTypes = ['Elementary', 'Middle School', 'Secondary', 'K-12'];
+    const independentSchoolTypes = ['Elementary', 'Secondary'];
+    const schoolTypes = isIndependent ? independentSchoolTypes : publicSchoolTypes;
+    const total = Object.values(data).reduce((a, b) => a + b, 0);
+    if (total === 0) return <div className="text-center text-xs text-gray-400">N/A</div>;
+
+    const colors = isIndependent ? ['#8884d8', '#ffc658'] : ['#8884d8', '#82ca9d', '#ffc658', '#ff8042'];
+
+    const getLabel = (type: string) => {
+        if (type === 'K-12') return 'K12';
+        if (type === 'Middle School') return 'M';
+        if (isIndependent) {
+            if (type === 'Elementary') return 'E';
+            if (type === 'Secondary') return 'S';
+        }
+        return type.substring(0, 1);
+    }
+    
+    const titleText = isIndependent 
+        ? `Eligible to Receive Public Tuition\n${schoolTypes.map(type => `${type}: ${data[type] || 0}`).join('\n')}`
+        : schoolTypes.map(type => `${type}: ${data[type] || 0}`).join('\n');
+
+    return (
+        <div className={`flex items-end justify-center gap-2 h-16 ${isIndependent ? 'w-auto' : 'w-24'} mx-auto`} title={titleText}>
+            {schoolTypes.map((type, index) => (
+                <div key={type} className="flex flex-col items-center justify-end h-full">
+                    <div className="w-4 rounded-sm" style={{ height: `${((data[type] || 0) / max) * 100}%`, backgroundColor: colors[index] }}></div>
+                    <span className="text-xs mt-1">{getLabel(type)}</span>
+                </div>
+            ))}
+        </div>
+    );
 };
+
 
 const FciChart: React.FC<{ data: { good: number; fair: number; poor: number; veryPoor: number; } }> = ({ data }) => {
   const fciColors = {
@@ -302,29 +316,46 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
             const lastValue = d.enrollmentHistory[d.enrollmentHistory.length - 1]?.enrollment || 0;
             const enrollmentChangePercentage = firstValue > 0 ? ((lastValue - firstValue) / firstValue) * 100 : (lastValue > 0 ? 100 : 0);
             
+            const publicSchoolTypes = (d.publicSchools || []).reduce((acc: Record<string, number>, school) => {
+                let type = school.Type || 'Other';
+                if (type === 'Middle') type = 'Middle School';
+                if (type !== 'CTE') {
+                    acc[type] = (acc[type] || 0) + 1;
+                }
+                return acc;
+            }, {});
+
+            const independentSchoolTypes = (d.independentSchools || []).reduce((acc: Record<string, number>, school) => {
+                const type = school.Type || 'Other';
+                acc[type] = (acc[type] || 0) + 1;
+                return acc;
+            }, {});
+
             return {
                 ...d,
                 grandListPerStudent: d.adm > 0 ? d.grandList / d.adm : 0,
                 numSchools: d.publicSchools ? d.publicSchools.length : 0,
-                enrollmentChangePercentage: enrollmentChangePercentage
+                enrollmentChangePercentage: enrollmentChangePercentage,
+                publicSchoolTypes,
+                independentSchoolTypes,
             };
         });
     }, [reportData]);
     
     const maxValues = React.useMemo(() => {
         if (!processedData || processedData.length === 0) {
-            return { townCount: 0, adm: 0, grandListPerStudent: 0, totalEEdGL: 0, schoolSize: 0 };
+            return { townCount: 0, adm: 0, grandListPerStudent: 0, totalEEdGL: 0, schoolType: 0 };
         }
-        const maxSchoolSize = Math.max(1, ...processedData.flatMap(d => [
-            d.enrollCategory.small, d.enrollCategory.medium, d.enrollCategory.large,
-            d.independentEnrollCategory.small, d.independentEnrollCategory.medium, d.independentEnrollCategory.large
+        const maxSchoolType = Math.max(1, ...processedData.flatMap(d => [
+            ...Object.values(d.publicSchoolTypes),
+            ...Object.values(d.independentSchoolTypes)
         ]));
         return {
             townCount: Math.max(...processedData.map(d => d.townCount)),
             adm: Math.max(...processedData.map(d => d.adm)),
             grandListPerStudent: Math.max(...processedData.map(d => d.grandListPerStudent)),
             totalEEdGL: Math.max(...processedData.map(d => d.totalEEdGL)),
-            schoolSize: maxSchoolSize
+            schoolType: maxSchoolType
         };
     }, [processedData]);
 
@@ -338,7 +369,11 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
                 if (key === 'enrollmentHistory') {
                     valA = a.enrollmentChangePercentage;
                     valB = b.enrollmentChangePercentage;
-                } else {
+                } else if (key === 'publicSchoolTypes' || key === 'independentSchoolTypes') {
+                    valA = Object.keys(a[key]).length;
+                    valB = Object.keys(b[key]).length;
+                }
+                else {
                     valA = a[key] || 0;
                     valB = b[key] || 0;
                 }
@@ -367,8 +402,8 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
         { key: 'adm', label: 'ADM' },
         { key: 'enrollmentHistory', label: '10-Year Change' },
         { key: 'totalEEdGL', label: 'Total Eq Ed GL' },
-        { key: 'enrollCategory', label: 'Public Schools by Size'},
-        { key: 'independentSchoolCount', label: 'Ind. Schools by Size' },
+        { key: 'publicSchoolTypes', label: 'Public Schools by Type'},
+        { key: 'independentSchoolTypes', label: 'Ind. Schools' },
         { key: 'fciCounts', label: 'FCI Categories' },
         { key: 'suStatus', label: 'SU INTACT' },
     ];
@@ -438,8 +473,8 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
                                                     />
                                                 </td>
                                                 <td className="px-6 py-4"><div>{currencyBillionFormatter(item.totalEEdGL)}</div><DataBar value={item.totalEEdGL} maxValue={maxValues.totalEEdGL} color={item.color} /></td>
-                                                <td className="px-6 py-4"><SchoolSizeChart data={item.enrollCategory} max={maxValues.schoolSize} /></td>
-                                                <td className="px-6 py-4"><SchoolSizeChart data={item.independentEnrollCategory} max={maxValues.schoolSize} /></td>
+                                                <td className="px-6 py-4"><SchoolTypeChart data={item.publicSchoolTypes} max={maxValues.schoolType} /></td>
+                                                <td className="px-6 py-4"><SchoolTypeChart data={item.independentSchoolTypes} max={maxValues.schoolType} isIndependent={true} /></td>
                                                 <td className="px-6 py-4"><FciChart data={item.fciCounts} /></td>
                                                 <td className="px-6 py-4 text-center"><div title={`Intact: ${item.suStatus.intact.join(', ')}\nDivided: ${item.suStatus.divided.join(', ')}`}><CheckIcon /> {item.suStatus.intact.length} <XIcon /> {item.suStatus.divided.length}</div></td>
                                             </tr>
