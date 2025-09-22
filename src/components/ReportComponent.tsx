@@ -412,6 +412,43 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
     const numberFormatter = (value: number) => value ? value.toLocaleString() : '0';
     const fullCurrencyFormatter = (value: number) => `$${Math.round(value || 0).toLocaleString()}`;
 
+    const exportReportToCsv = () => {
+      let csvContent = "District Name,ADM,10-Year Change (%),Total Eq Ed GL,Elementary Schools,Middle Schools,Secondary Schools,K-12 Schools,FCI <10%,FCI 10-30%,FCI 30-65%,FCI >65%,SU Intact,SU Divided,Intact SUs,Divided SUs\r\n";
+      sortedTableData.forEach(item => {
+        const row = [
+          `"${item.name}"`,
+          item.adm,
+          item.enrollmentChangePercentage.toFixed(2),
+          item.totalEEdGL,
+          item.publicSchoolTypes['Elementary'] || 0,
+          item.publicSchoolTypes['Middle School'] || 0,
+          item.publicSchoolTypes['Secondary'] || 0,
+          item.publicSchoolTypes['K-12'] || 0,
+          item.fciCounts.good,
+          item.fciCounts.fair,
+          item.fciCounts.poor,
+          item.fciCounts.veryPoor,
+          item.suStatus.intact.length,
+          item.suStatus.divided.length,
+          `"${item.suStatus.intact.join(', ')}"`,
+          `"${item.suStatus.divided.join(', ')}"`
+        ].join(',');
+        csvContent += row + "\r\n";
+      });
+  
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      const date = new Date().toISOString().slice(0, 10);
+      const fileName = `district_report_${date}.csv`;
+      
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    };
 
     // Find the selected district object safely
     const selectedDistrict = processedData.find(d => d.id === selectedDistrictId);
@@ -447,7 +484,10 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Grand List per Student (2025-Projected)</h3><ResponsiveContainer width="100%" height={300}><BarChart data={processedData} margin={{ top: 5, right: 20, left: 50, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.2)" /><XAxis dataKey="name" tick={{ fill: '#6b7280' }} fontSize={12} interval={0} angle={-20} textAnchor="end" height={60} /><YAxis tick={{ fill: '#6b7280' }} tickFormatter={fullCurrencyFormatter} /><Tooltip content={<CustomTooltip formatter={fullCurrencyFormatter} />} cursor={{fill: 'rgba(239, 246, 255, 0.5)'}} /><Bar dataKey="grandListPerStudent" name="GL / Student" radius={[4, 4, 0, 0]}>{processedData.map((entry) => (<Cell key={`cell-${entry.id}`} fill={entry.color || '#82ca9d'} />))}</Bar></BarChart></ResponsiveContainer></div>
                         </div>
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
-                            <div className="p-6"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">District Data Table</h3><p className="text-sm text-gray-500 dark:text-gray-400">Click headers to sort.</p></div>
+                            <div className="p-6">
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">District Data Table</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Click headers to sort.</p>
+                            </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
                                     <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
@@ -481,6 +521,14 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+                                <button
+                                onClick={exportReportToCsv}
+                                className="text-sm text-blue-600 hover:underline"
+                                >
+                                Export this table to CSV
+                                </button>
                             </div>
                         </div>
                     </div>

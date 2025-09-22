@@ -612,6 +612,51 @@ const App: React.FC = () => {
     setExportShareModalOpen(false);
   }, [assignments, townData, mapName, districtNames]);
 
+  const exportToGeoJSON = useCallback(() => {
+    if (!townGeoJSON) {
+      showNotification('GeoJSON data is not loaded yet.', true);
+      return;
+    }
+
+    const features = townGeoJSON.features.map(feature => {
+      const townId = feature.properties.TOWNNAME;
+      const districtId = assignments[townId];
+      const districtName = districtId ? districtNames[districtId] : 'Unassigned';
+
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          DISTRICT_ID: districtId,
+          DISTRICT_NAME: districtName,
+        },
+      };
+    });
+
+    const geoJsonData = {
+      type: 'FeatureCollection',
+      features,
+    };
+
+    const blob = new Blob([JSON.stringify(geoJsonData, null, 2)], { type: 'application/geo+json' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+
+    const safeMapName = mapName.trim().replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const date = new Date().toISOString().slice(0, 10);
+    const fileName = safeMapName ? `${safeMapName}_${date}.geojson` : `district_assignments_${date}.geojson`;
+
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showNotification('GeoJSON download started.');
+    setExportShareModalOpen(false);
+  }, [assignments, townGeoJSON, mapName, districtNames]);
+
   const handleGenerateReport = useCallback(() => {
     const dataForReport = districtOrder
       .map(id => {
@@ -1018,6 +1063,7 @@ const App: React.FC = () => {
                       <div className="space-y-4">
                           <button onClick={handleExportJpg} className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">JPG Image</button>
                           <button onClick={exportAssignmentsToCsv} className="w-full bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded">CSV Assignments</button>
+                          <button onClick={exportToGeoJSON} className="w-full bg-orange-500 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded">GeoJSON</button>
                           <button onClick={copyShareURLToClipboard} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Copy Shareable Link</button>
                       </div>
                       <button onClick={() => setExportShareModalOpen(false)} className="mt-8 w-full text-sm text-gray-600 hover:text-gray-800 py-2">Close</button>
