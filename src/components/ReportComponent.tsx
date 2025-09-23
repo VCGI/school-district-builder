@@ -421,7 +421,7 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
     const fullCurrencyFormatter = (value: number) => `$${Math.round(value || 0).toLocaleString()}`;
 
     const exportReportToCsv = () => {
-      let csvContent = "District Name,ADM,10-Year Change (%),Total Eq Ed GL,Elementary Schools,Middle Schools,Secondary Schools,K-12 Schools,FCI <10%,FCI 10-30%,FCI 30-65%,FCI >65%,SU Intact,SU Divided,Intact SUs,Divided SUs\r\n";
+      let csvContent = "District Name,ADM,10-Year Change (%),Total Eq Ed GL,Elementary Schools,Middle Schools,Secondary Schools,K-12 Schools,Independent Elementary Schools,Independent Secondary Schools,FCI <10%,FCI 10-30%,FCI 30-65%,FCI >65%,SU Intact,SU Divided,Intact SUs,Divided SUs\r\n";
       sortedTableData.forEach(item => {
         const row = [
           `"${item.name}"`,
@@ -432,6 +432,8 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
           item.publicSchoolTypes['Middle School'] || 0,
           item.publicSchoolTypes['Secondary'] || 0,
           item.publicSchoolTypes['K-12'] || 0,
+          item.independentSchoolTypes['Elementary'] || 0,
+          item.independentSchoolTypes['Secondary'] || 0,
           item.fciCounts.good,
           item.fciCounts.fair,
           item.fciCounts.poor,
