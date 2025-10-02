@@ -1,6 +1,6 @@
 // src/components/ReportComponent.tsx
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import type { ReportData } from '../types';
 
 interface ReportComponentProps {
@@ -463,6 +463,17 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
     // Find the selected district object safely
     const selectedDistrict = processedData.find(d => d.id === selectedDistrictId);
 
+    const maxLabelLength = React.useMemo(() => {
+        if (!processedData.length) return 0;
+        return Math.max(...processedData.map(d => d.name.length));
+    }, [processedData]);
+
+    const xAxisHeight = React.useMemo(() => {
+        if (maxLabelLength > 20) return 150;
+        if (maxLabelLength > 10) return 100;
+        return 60;
+    }, [maxLabelLength]);
+
     return (
         <div className="bg-gray-50 dark:bg-gray-900 h-screen overflow-y-auto font-sans">
             <div className="sticky top-0 z-10 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
@@ -490,8 +501,21 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
                     <div className="mb-12">
                         <h2 className="text-3xl font-semibold pb-1 border-b-2 border-gray-300 mb-6" style={{ color: '#003300' }}>District Overview</h2>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Average Daily Membership (FY25)</h3><ResponsiveContainer width="100%" height={400}><BarChart data={sortedAdmData} margin={{ top: 5, right: 20, left: 10, bottom: 50 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.2)" /><XAxis dataKey="name" tick={{ fill: '#6b7280' }} fontSize={12} interval={0} angle={-45} textAnchor="end" height={150} /><YAxis tick={{ fill: '#6b7280' }} tickFormatter={numberFormatter} /><Tooltip content={<CustomTooltip formatter={numberFormatter} />} cursor={{fill: 'rgba(239, 246, 255, 0.5)'}} /><Bar dataKey="adm" name="ADM" radius={[4, 4, 0, 0]}>{processedData.map((entry) => (<Cell key={`cell-${entry.id}`} fill={entry.color || '#8884d8'} />))}</Bar></BarChart></ResponsiveContainer></div>
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Grand List per Student (2025-Projected)</h3><ResponsiveContainer width="100%" height={400}><BarChart data={sortedGrandListPerStudentData} margin={{ top: 5, right: 20, left: 50, bottom: 50 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.2)" /><XAxis dataKey="name" tick={{ fill: '#6b7280' }} fontSize={12} interval={0} angle={-45} textAnchor="end" height={150} /><YAxis tick={{ fill: '#6b7280' }} tickFormatter={fullCurrencyFormatter} /><Tooltip content={<CustomTooltip formatter={fullCurrencyFormatter} />} cursor={{fill: 'rgba(239, 246, 255, 0.5)'}} /><Bar dataKey="grandListPerStudent" name="GL / Student" radius={[4, 4, 0, 0]}>{processedData.map((entry) => (<Cell key={`cell-${entry.id}`} fill={entry.color || '#82ca9d'} />))}</Bar></BarChart></ResponsiveContainer></div>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Average Daily Membership (FY25 PreK-12)</h3>
+                                <ResponsiveContainer width="100%" height={400}>
+                                    <BarChart data={sortedAdmData} margin={{ top: 5, right: 20, left: 10, bottom: 50 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.2)" />
+                                        <XAxis dataKey="name" tick={{ fill: '#6b7280' }} fontSize={12} interval={0} angle={-45} textAnchor="end" height={xAxisHeight} />
+                                        <YAxis tick={{ fill: '#6b7280' }} tickFormatter={numberFormatter} ticks={[4000, 8000]} />
+                                        <Tooltip content={<CustomTooltip formatter={numberFormatter} />} cursor={{fill: 'rgba(239, 246, 255, 0.5)'}} />
+                                        <ReferenceLine y={4000} stroke="#666" strokeDasharray="3 3" />
+                                        <ReferenceLine y={8000} stroke="#666" strokeDasharray="3 3" />
+                                        <Bar dataKey="adm" name="ADM" radius={[4, 4, 0, 0]}>{sortedAdmData.map((entry) => (<Cell key={`cell-${entry.id}`} fill={entry.color} />))}</Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md"><h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Grand List per Student (2025-Projected)</h3><ResponsiveContainer width="100%" height={400}><BarChart data={sortedGrandListPerStudentData} margin={{ top: 5, right: 20, left: 50, bottom: 50 }}><CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.2)" /><XAxis dataKey="name" tick={{ fill: '#6b7280' }} fontSize={12} interval={0} angle={-45} textAnchor="end" height={xAxisHeight} /><YAxis tick={{ fill: '#6b7280' }} tickFormatter={fullCurrencyFormatter} /><Tooltip content={<CustomTooltip formatter={fullCurrencyFormatter} />} cursor={{fill: 'rgba(239, 246, 255, 0.5)'}} /><Bar dataKey="grandListPerStudent" name="GL / Student" radius={[4, 4, 0, 0]}>{sortedGrandListPerStudentData.map((entry) => (<Cell key={`cell-${entry.id}`} fill={entry.color} />))}</Bar></BarChart></ResponsiveContainer></div>
                         </div>
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
                             <div className="p-6">
