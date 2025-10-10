@@ -1,4 +1,4 @@
-export const GEOJSON_URL = 'https://s3.us-east-2.amazonaws.com/vtopendata-prd/_Other/Education/VT_School_Geo_v2.json';
+export const GEOJSON_URL = 'https://s3.us-east-2.amazonaws.com/vtopendata-prd/_Other/Education/VT_School_Geo.json';
 
 export const PROPERTY_KEYS = {
   TOWN_ID: 'TOWNNAME',
