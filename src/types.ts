@@ -15,6 +15,15 @@ export interface TownProperties {
   Public_Schools: number;
   SqMi: number;
   OBJECTID: number;
+    Y15?: number; 
+  Y16?: number; 
+  Y17?: number; 
+  Y18?: number; 
+  Y19?: number; 
+  Y20?: number; 
+  Y21?: number; 
+  Y22?: number; 
+  Y23?: number; 
   [key: string]: any;
 }
 
@@ -57,6 +66,7 @@ export interface AllDistrictStats {
 export interface SchoolDetail {
   NAME: string;
   Grades: string;
+  GradesList?: string; 
   ENROLLMENT: number;
   TOWN: string;
   Type: string;
@@ -77,6 +87,8 @@ export interface SchoolDetail {
   '2020Enroll'?: number;
   '2021Enroll'?: number;
   '2022Enroll'?: number;
+  '2023Enroll'?: number;
+  PK_Adult_2024Enroll?: number;
 }
 
 export interface SchoolDetailsByTown {

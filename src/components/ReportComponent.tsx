@@ -212,6 +212,19 @@ const DistrictProfileCard = ({ district }: { district: ReportData & { grandListP
         return config.direction === 'ascending' ? <ChevronUp /> : <ChevronDown />;
     };
 
+    const formatGrades = (grades: string, gradesList?: string) => {
+        if (!gradesList) return grades;
+        const specialGrades = new Set();
+        if (gradesList.includes('#PK')) specialGrades.add('PK');
+        if (gradesList.includes('#EE')) specialGrades.add('EE');
+        if (gradesList.includes('#AE')) specialGrades.add('AE');
+
+        if (specialGrades.size > 0) {
+            return `${grades} (${Array.from(specialGrades).join(', ')})`;
+        }
+        return grades;
+    };
+
     if (!district) return <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow">Please select a district to view its profile.</div>;
 
     return (
@@ -268,15 +281,28 @@ const DistrictProfileCard = ({ district }: { district: ReportData & { grandListP
                             <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400">
                                 <tr>
                                     <th className="px-4 py-2"><button onClick={() => requestSort('NAME', 'schools')} className="flex items-center font-semibold py-1">School Name {getSortIcon('NAME', 'schools')}</button></th>
-                                    <th className="px-4 py-2"><button onClick={() => requestSort('TOWN', 'schools')} className="flex items-center font-semibold py-1">Town {getSortIcon('TOWN', 'schools')}</button></th>
                                     <th className="px-4 py-2"><button onClick={() => requestSort('Type', 'schools')} className="flex items-center font-semibold py-1">Type {getSortIcon('Type', 'schools')}</button></th>
                                     <th className="px-4 py-2"><button onClick={() => requestSort('Grades', 'schools')} className="flex items-center font-semibold py-1">Grades {getSortIcon('Grades', 'schools')}</button></th>
-                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('ENROLLMENT', 'schools')} className="flex items-center font-semibold w-full justify-end py-1">Enrollment {getSortIcon('ENROLLMENT', 'schools')}</button></th>
+                                    <th className="px-4 py-2 text-right"><button onClick={() => requestSort('ENROLLMENT', 'schools')} className="flex items-center font-semibold w-full justify-end py-1">Enrollment (K-12) {getSortIcon('ENROLLMENT', 'schools')}</button></th>
                                     <th className="px-4 py-2 text-right"><button onClick={() => requestSort('yearBuilt', 'schools')} className="flex items-center font-semibold w-full justify-end py-1">Year Built {getSortIcon('yearBuilt', 'schools')}</button></th>
                                     <th className="px-4 py-2 text-right"><button onClick={() => requestSort('fciCategory', 'schools')} className="flex items-center font-semibold w-full justify-end py-1">FCI Cat. {getSortIcon('fciCategory', 'schools')}</button></th>
                                 </tr>
                             </thead>
-                            <tbody>{sortedSchools.map(school => (<tr key={school.id} className="border-t border-gray-200 dark:border-gray-700"><td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{school.NAME}</td><td className="px-4 py-2">{school.TOWN}</td><td className="px-4 py-2">{school.Type}</td><td className="px-4 py-2">{school.Grades}</td><td className="px-4 py-2 text-right">{numberFormatter(school.ENROLLMENT)}</td><td className="px-4 py-2 text-right">{school.yearBuilt || 'N/A'}</td><td className="px-4 py-2 text-right font-mono">{school.fciCategory || 'N/A'}</td></tr>))}</tbody>
+                            <tbody>
+                                {sortedSchools.map(school => (
+                                    <tr key={school.id} className="border-t border-gray-200 dark:border-gray-700">
+                                        <td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">
+                                            {school.NAME}
+                                            <div className="text-xs italic text-gray-500">{school.TOWN}</div>
+                                        </td>
+                                        <td className="px-4 py-2">{school.Type}</td>
+                                        <td className="px-4 py-2">{formatGrades(school.Grades, school.GradesList)}</td>
+                                        <td className="px-4 py-2 text-right">{numberFormatter(school.ENROLLMENT)}</td>
+                                        <td className="px-4 py-2 text-right">{school.yearBuilt || 'N/A'}</td>
+                                        <td className="px-4 py-2 text-right font-mono">{school.fciCategory || 'N/A'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
                         </table>
                     </div>
                 </div>

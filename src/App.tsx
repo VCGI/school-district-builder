@@ -6,7 +6,7 @@ import pako from 'pako';
 import html2canvas from 'html2canvas';
 import 'leaflet/dist/leaflet.css';
 import {
-  Tab, TownData, Assignments, SupervisoryUnions, TownGeoJSON, AllDistrictStats, DistrictNames, SchoolDetailsByTown, ReportData, SchoolDetail, SchoolPointFeature, SchoolTypeFilters
+  Tab, TownData, Assignments, SupervisoryUnions, TownGeoJSON, AllDistrictStats, DistrictNames, SchoolDetailsByTown, ReportData, SchoolDetail, SchoolPointFeature, SchoolTypeFilters, TownProperties
 } from './types';
 import {
   GEOJSON_URL, SCHOOLS_URL, PROPERTY_KEYS, MAX_DISTRICTS, INITIAL_DISTRICTS, districtColors, BASE62_CHARS, SCHOOL_TYPE_COLORS
@@ -166,6 +166,9 @@ const App: React.FC = () => {
                     '2018Enroll': attrs['2018Enroll'], '2019Enroll': attrs['2019Enroll'],
                     '2020Enroll': attrs['2020Enroll'], '2021Enroll': attrs['2021Enroll'],
                     '2022Enroll': attrs['2022Enroll'],
+                    '2023Enroll': attrs['2023Enroll'],
+                    GradesList: attrs.GradesList, // Add this line
+                    PK_Adult_2024Enroll: attrs.PK_Adult_2024Enroll, // Add this line
                     accessType: attrs.accessType,
                     latitude: schoolFeature.geometry?.coordinates[1],
                     longitude: schoolFeature.geometry?.coordinates[0]
@@ -681,23 +684,28 @@ const App: React.FC = () => {
           const publicSchoolsInDistrict = stats.towns.flatMap(townName => schoolDetails[townName.toUpperCase()] || []);
           const independentSchoolsInDistrict = stats.towns.flatMap(townName => independentSchoolDetails[townName.toUpperCase()] || []);
 
-          // Aggregate historical enrollment for the sparkline
+          // Replace the old enrollment history logic with this new block
           const enrollmentHistory: { year: string; enrollment: number }[] = [];
-          const years = ['2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2024']; // Using 2024 for current FY25
-          const yearKeys: (keyof SchoolDetail)[] = ['2014Enroll', '2015Enroll', '2016Enroll', '2017Enroll', '2018Enroll', '2019Enroll', '2020Enroll', '2021Enroll', '2022Enroll', 'ENROLLMENT'];
+          // Define the years and the corresponding keys from the GeoJSON properties
+          const years = ['2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024']; 
+          const yearKeys: (keyof TownProperties)[] = ['Y15', 'Y16', 'Y17', 'Y18', 'Y19', 'Y20', 'Y21', 'Y22', 'Y23', 'Public_School_Students'];
           const yearlyTotals: { [year: string]: number } = {};
 
-          publicSchoolsInDistrict.forEach(school => {
-              yearKeys.forEach((key, index) => {
-                  const year = years[index];
-                  if (!yearlyTotals[year]) {
-                      yearlyTotals[year] = 0;
-                  }
-                  const enrollmentValue = school[key];
-                  if (typeof enrollmentValue === 'number') {
-                      yearlyTotals[year] += enrollmentValue;
-                  }
-              });
+          // Iterate through the towns in the district to sum up the yearly data
+          stats.towns.forEach(townName => {
+              const townProps = townData[townName];
+              if (townProps) {
+                  yearKeys.forEach((key, index) => {
+                      const year = years[index];
+                      if (!yearlyTotals[year]) {
+                          yearlyTotals[year] = 0;
+                      }
+                      const enrollmentValue = townProps[key];
+                      if (typeof enrollmentValue === 'number') {
+                          yearlyTotals[year] += enrollmentValue;
+                      }
+                  });
+              }
           });
 
           for (const year of years) {

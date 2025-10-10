@@ -1,4 +1,4 @@
-export const GEOJSON_URL = 'https://s3.us-east-2.amazonaws.com/vtopendata-prd/_Other/Education/VT_School_Geo.json';
+export const GEOJSON_URL = 'https://s3.us-east-2.amazonaws.com/vtopendata-prd/_Other/Education/VT_School_Geo_v2.json';
 
 export const PROPERTY_KEYS = {
   TOWN_ID: 'TOWNNAME',
@@ -30,4 +30,4 @@ export const SCHOOL_TYPE_COLORS: { [key: string]: string } = {
 
 export const BASE62_CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-export const SCHOOLS_URL = 'https://s3.us-east-2.amazonaws.com/vtopendata-prd/_Other/Education/schools_all_v03.json';
+export const SCHOOLS_URL = 'https://s3.us-east-2.amazonaws.com/vtopendata-prd/_Other/Education/schools_all.json';
