@@ -30,7 +30,16 @@ const toBase62 = (num: number) => {
 };
 const fromBase62 = (str: string) => {
     let num = 0;
-    for (let i = 0; i < str.length; i++) { num = num * 62 + BASE62_CHARS.indexOf(str[i]); }
+    for (let i = 0; i < str.length; i++) {
+        // --- FIX VULN-006 ---
+        const charIndex = BASE62_CHARS.indexOf(str[i]);
+        if (charIndex === -1) {
+            console.error(`Invalid character in Base62 string: ${str[i]}`);
+            throw new Error("Malformed Base62 string");
+        }
+        num = num * 62 + charIndex;
+        // --- END FIX ---
+    }
     return num;
 };
 
@@ -447,6 +456,18 @@ const App: React.FC = () => {
   const loadStateFromURL = (currentTownData: TownData, currentAssignments: Assignments) => {
     const params = new URLSearchParams(window.location.search);
     const data = params.get('data');
+
+    // --- FIX VULN-003: Add a size limit ---
+    const MAX_URL_STATE_LENGTH = 20480; // 20 KB limit
+    if (data && data.length > MAX_URL_STATE_LENGTH) {
+        showNotification('Failed to load map: URL data is too large.', true);
+        const url = new URL(window.location.toString());
+        url.searchParams.delete('data');
+        window.history.replaceState({}, '', url);
+        return;
+    }
+    // --- End of Fix ---
+
     if (!data) {
       setDistrictNames(initializeDistrictNames(districtOrder));
       return;

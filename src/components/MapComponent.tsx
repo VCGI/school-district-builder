@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import { TownGeoJSON, Assignments, TownFeature, SchoolPointFeature, SchoolTypeFilters } from '../types';
 import { districtColors, SCHOOL_TYPE_COLORS } from '../constants';
+import { escapeHtml } from '../utils';
 import type { Map } from 'leaflet';
 
 interface MapComponentProps {
@@ -110,11 +111,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
                 const sqMi = props.SqMi ? props.SqMi.toFixed(2) : 'N/A';
               
                 layer.bindTooltip(`
-                    <div class="font-bold text-base text-gray-800">${townId}</div><hr class="my-1 border-gray-300">
-                    <div><strong>County:</strong> ${county}</div>
-                    <div><strong>Supervisory Union:</strong> ${supervisoryUnion}</div>
+                    <div class="font-bold text-base text-gray-800">${escapeHtml(townId)}</div><hr class="my-1 border-gray-300">
+                    <div><strong>County:</strong> ${escapeHtml(county)}</div>
+                    <div><strong>Supervisory Union:</strong> ${escapeHtml(supervisoryUnion)}</div>
                     <div><strong>Students:</strong> ${studentCount.toLocaleString()}</div>
-                    <div><strong>Area:</strong> ${sqMi} sq. mi.</div>`, 
+                    <div><strong>Area:</strong> ${escapeHtml(sqMi)} sq. mi.</div>`, 
                     { sticky: true, offset: L.point(15, 0) }
                 );
 
