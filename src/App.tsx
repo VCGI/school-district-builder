@@ -17,6 +17,7 @@ import MapComponent from './components/MapComponent';
 import ReportComponent from './components/ReportComponent';
 import HelpModal from './components/HelpModal';
 import SplashScreen from './components/SplashScreen';
+import { escapeHtml, sanitizeCsvCell } from './utils'; // Import sanitization functions
 import type { Map } from 'leaflet';
 
 const DISCLAIMER_VERSION = '1.0'; // Version for the disclaimer acknowledgment
@@ -31,14 +32,12 @@ const toBase62 = (num: number) => {
 const fromBase62 = (str: string) => {
     let num = 0;
     for (let i = 0; i < str.length; i++) {
-        // --- FIX VULN-006 ---
         const charIndex = BASE62_CHARS.indexOf(str[i]);
         if (charIndex === -1) {
             console.error(`Invalid character in Base62 string: ${str[i]}`);
             throw new Error("Malformed Base62 string");
         }
         num = num * 62 + charIndex;
-        // --- END FIX ---
     }
     return num;
 };
@@ -176,8 +175,8 @@ const App: React.FC = () => {
                     '2020Enroll': attrs['2020Enroll'], '2021Enroll': attrs['2021Enroll'],
                     '2022Enroll': attrs['2022Enroll'],
                     '2023Enroll': attrs['2023Enroll'],
-                    GradesList: attrs.GradesList, // Add this line
-                    PK_Adult_2024Enroll: attrs.PK_Adult_2024Enroll, // Add this line
+                    GradesList: attrs.GradesList,
+                    PK_Adult_2024Enroll: attrs.PK_Adult_2024Enroll,
                     accessType: attrs.accessType,
                     latitude: schoolFeature.geometry?.coordinates[1],
                     longitude: schoolFeature.geometry?.coordinates[0]
@@ -457,7 +456,6 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const data = params.get('data');
 
-    // --- FIX VULN-003: Add a size limit ---
     const MAX_URL_STATE_LENGTH = 20480; // 20 KB limit
     if (data && data.length > MAX_URL_STATE_LENGTH) {
         showNotification('Failed to load map: URL data is too large.', true);
@@ -466,7 +464,6 @@ const App: React.FC = () => {
         window.history.replaceState({}, '', url);
         return;
     }
-    // --- End of Fix ---
 
     if (!data) {
       setDistrictNames(initializeDistrictNames(districtOrder));
@@ -606,10 +603,10 @@ const App: React.FC = () => {
         const townProps = townData[townId];
         const districtName = districtId ? districtNames[districtId] : 'Unassigned';
         const row = [
-            `"${townProps.TOWNNAME}"`, 
-            `"${townProps.County}"`, 
+            sanitizeCsvCell(townProps.TOWNNAME), 
+            sanitizeCsvCell(townProps.County), 
             districtId !== null ? districtId : '', 
-            `"${districtName}"`,
+            sanitizeCsvCell(districtName),
             townProps[PROPERTY_KEYS.STUDENT_COUNT] || 0,
             townProps[PROPERTY_KEYS.SCHOOLS] || 0,
             townProps[PROPERTY_KEYS.GL] || 0
@@ -705,14 +702,11 @@ const App: React.FC = () => {
           const publicSchoolsInDistrict = stats.towns.flatMap(townName => schoolDetails[townName.toUpperCase()] || []);
           const independentSchoolsInDistrict = stats.towns.flatMap(townName => independentSchoolDetails[townName.toUpperCase()] || []);
 
-          // Replace the old enrollment history logic with this new block
           const enrollmentHistory: { year: string; enrollment: number }[] = [];
-          // Define the years and the corresponding keys from the GeoJSON properties
           const years = ['2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024']; 
           const yearKeys: (keyof TownProperties)[] = ['Y15', 'Y16', 'Y17', 'Y18', 'Y19', 'Y20', 'Y21', 'Y22', 'Y23', 'Public_School_Students'];
           const yearlyTotals: { [year: string]: number } = {};
 
-          // Iterate through the towns in the district to sum up the yearly data
           stats.towns.forEach(townName => {
               const townProps = townData[townName];
               if (townProps) {
@@ -794,7 +788,7 @@ const App: React.FC = () => {
           return {
               id: `dist_${id}`, name: districtName, color: districtColors[id - 1], adm: stats.studentTotal,
               grandList: stats.totalGL, homeEEdGL, nonHomeEEdGL, totalEEdGL, townCount: stats.townCount,
-              enrollmentHistory, // Add the new property
+              enrollmentHistory,
               enrollCategory, independentEnrollCategory, independentSchoolCount: independentSchoolsInDistrict.length,
               pcbAboveSALCount, fciCounts, townsWithAdm,
               publicSchools: publicSchoolsInDistrict.map(school => ({ ...school, id: `sch_pub_${school.NAME.replace(/\s+/g, '_')}_${Math.random()}` })),
@@ -819,14 +813,14 @@ const App: React.FC = () => {
       if (!printContainer || !townGeoJSON) return;
 
       const legendHtml = (() => {
-          let legend = `<h2 style="font-size: 1.5rem; font-weight: bold; color: #003300; margin-bottom: 1rem;">${mapName || 'District Map'}</h2>`;
+          let legend = `<h2 style="font-size: 1.5rem; font-weight: bold; color: #003300; margin-bottom: 1rem;">${escapeHtml(mapName) || 'District Map'}</h2>`;
           legend += '<div style="display: grid; grid-template-columns: 1fr; gap: 1rem;">';
           districtOrder.forEach(id => {
               const stats = allDistrictStats[id];
               if (!stats || stats.townCount === 0) return;
               const glPerStudent = stats.studentTotal > 0 ? stats.totalGL / stats.studentTotal : 0;
               const formattedGlPerStudent = `$${Math.floor(glPerStudent).toLocaleString('en-US')}`;
-              const districtName = districtNames[id] || `District ${id}`;
+              const districtName = escapeHtml(districtNames[id] || `District ${id}`);
               legend += `
                   <div style="border: 1px solid #ddd; border-left: 5px solid ${districtColors[id-1]}; padding: 0.5rem; border-radius: 4px; background-color: #f9f9f9; font-size: 0.8rem;">
                       <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.25rem;">
@@ -930,7 +924,8 @@ const App: React.FC = () => {
     const districtNameMap: { [id: number]: string } = {};
 
     lines.slice(1).forEach(line => {
-        const data = line.split(',');
+        // Basic CSV parsing
+        const data = line.split(','); 
         const townName = data[townIndex]?.replace(/"/g, '').trim();
         const districtIdStr = data[districtIdIndex]?.replace(/"/g, '').trim();
         const districtId = districtIdStr ? parseInt(districtIdStr, 10) : null;
@@ -944,7 +939,10 @@ const App: React.FC = () => {
             if (districtNameIndex !== -1) {
                 const districtName = data[districtNameIndex]?.replace(/"/g, '').trim();
                 if (districtName) {
-                    districtNameMap[districtId] = districtName;
+                    // Basic sanitization on import
+                    districtNameMap[districtId] = districtName.startsWith('=') || districtName.startsWith('+') || districtName.startsWith('-') || districtName.startsWith('@') 
+                        ? `'${districtName}` 
+                        : districtName;
                 }
             }
         }
@@ -1155,3 +1153,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
