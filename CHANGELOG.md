@@ -2,7 +2,7 @@
 
 ## \[0.2.13\] \- [2025-10-23]
 
-### Changed
+### Fixed
 - Improved data handling for map tooltips to ensure proper display of special characters.
 - Enhanced robustness of URL state loading by adding size limits and improved validation.
 - Updated dependencies for general improvements.
