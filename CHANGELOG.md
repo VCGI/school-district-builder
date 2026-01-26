@@ -1,4 +1,14 @@
 ## 
+## [0.2.14] - 2026-01-26
+
+### Changed
+- Increased the maximum number of supported districts from 25 to 30.
+- Extended the district color palette with 5 new distinct colors to support the additional districts.
+
+### Fixed
+- Resolved accessibility issues in the Report view where section headers were difficult to read when using dark mode.
+
+---
 
 ## \[0.2.13\] \- [2025-10-23]
 
