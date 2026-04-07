@@ -8,7 +8,7 @@ export const PROPERTY_KEYS = {
   SCHOOLS: 'Public_Schools',
 };
 
-export const MAX_DISTRICTS = 25;
+export const MAX_DISTRICTS = 30;
 export const INITIAL_DISTRICTS = 10;
 
 export const districtColors = [
@@ -17,6 +17,7 @@ export const districtColors = [
     '#2F4550', '#B4A29E', '#5E4B56', '#A37774', '#6A0DAD',
     '#FFD700', '#FF69B4', '#00FFFF', '#7CFC00', '#FF4500',
     '#DDA0DD', '#8B4513', '#4682B4', '#D2B48C', '#008080',
+    '#E6194B', '#3CB44B', '#FFE119', '#4363D8', '#F58231'
 ];
 
 export const SCHOOL_TYPE_COLORS: { [key: string]: string } = {

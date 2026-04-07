@@ -506,7 +506,7 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center py-4">
                         <div>
-                            <h1 className="text-3xl lg:text-4xl font-bold" style={{ color: '#003300' }}>School District Builder Report</h1>
+                            <h1 className="text-3xl lg:text-4xl font-bold text-[#003300] dark:text-white">School District Builder Report</h1>
                             <p className="mt-1 text-base text-gray-600 dark:text-gray-400">An overview of key metrics for all districts.</p>
                         </div>
                         <button onClick={onBack} className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded shrink-0 ml-4">
@@ -525,7 +525,7 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
                 )}
                 <div className="pt-10">
                     <div className="mb-12">
-                        <h2 className="text-3xl font-semibold pb-1 border-b-2 border-gray-300 mb-6" style={{ color: '#003300' }}>District Overview</h2>
+                        <h2 className="text-3xl font-semibold pb-1 border-b-2 border-gray-300 dark:border-gray-600 mb-6 text-[#003300] dark:text-white">District Overview</h2>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
                                 <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Average Daily Membership (FY25 PreK-12)</h3>
@@ -593,7 +593,7 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
                         </div>
                     </div>
                     <div>
-                        <h2 className="text-3xl font-semibold pb-1 border-b-2 border-gray-300 mb-6 mt-12" style={{ color: '#003300' }}>District Profiles</h2>
+                        <h2 className="text-3xl font-semibold pb-1 border-b-2 border-gray-300 dark:border-gray-600 mb-6 mt-12 text-[#003300] dark:text-white">District Profiles</h2>
                          <div className="mb-4">
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select a District to View Profile:</label>
                             <div className="flex flex-wrap gap-2">
