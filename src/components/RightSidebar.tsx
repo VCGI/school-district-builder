@@ -1,8 +1,9 @@
 // src/components/RightSidebar.tsx
 import React, { useState } from 'react';
 // Use 'import type' for type-only imports
-import type { AllDistrictStats, DistrictNames, SchoolDetailsByTown, SchoolDetail } from '../types';
+import type { AllDistrictStats, DistrictNames, SchoolDetailsByTown } from '../types';
 import { districtColors, MAX_DISTRICTS } from '../constants';
+import { groupSchoolsByType, sortSchoolTypes } from '../schoolGrouping';
 
 interface RightSidebarProps {
   districtOrder: number[];
@@ -165,31 +166,11 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
 
               // Public Schools
               const schoolsInDistrict = stats.towns.flatMap((townName: string) => schoolDetails[townName.toUpperCase()] || []);
-              const schoolsByType = schoolsInDistrict.reduce((acc, school) => {
-                  const schoolType = school.Type || 'Uncategorized';
-                  if (!acc[schoolType]) acc[schoolType] = [];
-                  acc[schoolType].push(school);
-                  return acc;
-              }, {} as Record<string, SchoolDetail[]>);
+              const schoolsByType = groupSchoolsByType(schoolsInDistrict);
 
               // Independent Schools
               const independentSchoolsInDistrict = stats.towns.flatMap((townName: string) => independentSchoolDetails[townName.toUpperCase()] || []);
-              const independentSchoolsByType = independentSchoolsInDistrict.reduce((acc, school) => {
-                  const schoolType = school.Type || 'Uncategorized';
-                  if (!acc[schoolType]) acc[schoolType] = [];
-                  acc[schoolType].push(school);
-                  return acc;
-              }, {} as Record<string, SchoolDetail[]>);
-              
-
-              const typeSortOrder = ['K-12', 'Elementary', 'Middle School', 'Secondary'];
-              const sortSchoolTypes = (schoolTypes: Record<string, SchoolDetail[]>) => Object.keys(schoolTypes).sort((a, b) => {
-                  if (a === 'CTE') return 1; if (b === 'CTE') return -1;
-                  const aIndex = typeSortOrder.indexOf(a); const bIndex = typeSortOrder.indexOf(b);
-                  if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-                  if (aIndex !== -1) return -1; if (bIndex !== -1) return 1;
-                  return a.localeCompare(b);
-              });
+              const independentSchoolsByType = groupSchoolsByType(independentSchoolsInDistrict);
 
               const sortedSchoolTypes = sortSchoolTypes(schoolsByType);
               const sortedIndependentSchoolTypes = sortSchoolTypes(independentSchoolsByType);
