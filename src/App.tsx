@@ -5,10 +5,10 @@ import L from 'leaflet';
 import html2canvas from 'html2canvas';
 import 'leaflet/dist/leaflet.css';
 import {
-  Tab, TownData, Assignments, SupervisoryUnions, TownGeoJSON, AllDistrictStats, DistrictNames, SchoolDetailsByTown, ReportData, SchoolDetail, SchoolPointFeature, SchoolTypeFilters
+  Tab, TownData, Assignments, AllDistrictStats, DistrictNames, ReportData, SchoolTypeFilters
 } from './types';
 import {
-  GEOJSON_URL, SCHOOLS_URL, PROPERTY_KEYS, MAX_DISTRICTS, INITIAL_DISTRICTS, districtColors, SCHOOL_TYPE_COLORS
+  PROPERTY_KEYS, MAX_DISTRICTS, INITIAL_DISTRICTS, districtColors, SCHOOL_TYPE_COLORS
 } from './constants';
 import LeftSidebar from './components/LeftSidebar';
 import RightSidebar from './components/RightSidebar';
@@ -19,6 +19,7 @@ import SplashScreen from './components/SplashScreen';
 import { escapeHtml, sanitizeCsvCell } from './utils'; // Import sanitization functions
 import { generateShareableString as buildShareableString, loadStateFromURL as decodeUrlState, initializeDistrictNames } from './urlState';
 import { buildReportData } from './reportData';
+import { useDistrictBuilderData } from './hooks/useDistrictBuilderData';
 import type { Map } from 'leaflet';
 
 const DISCLAIMER_VERSION = '1.0'; // Version for the disclaimer acknowledgment
@@ -34,15 +35,9 @@ const App: React.FC = () => {
   const [reportData, setReportData] = useState<ReportData[]>([]);
   const [unassignedTownsCount, setUnassignedTownsCount] = useState<number>(0);
 
-  const [townData, setTownData] = useState<TownData>({});
-  const [townGeoJSON, setTownGeoJSON] = useState<TownGeoJSON | null>(null);
   const [assignments, setAssignments] = useState<Assignments>({});
   const [districtNames, setDistrictNames] = useState<DistrictNames>({});
-  const [supervisoryUnions, setSupervisoryUnions] = useState<SupervisoryUnions>({});
-  const [schoolDetails, setSchoolDetails] = useState<SchoolDetailsByTown>({});
-  const [independentSchoolDetails, setIndependentSchoolDetails] = useState<SchoolDetailsByTown>({});
   const [districtOrder, setDistrictOrder] = useState<number[]>(() => Array.from({ length: INITIAL_DISTRICTS }, (_, i) => i + 1));
-  const [schoolsData, setSchoolsData] = useState<SchoolPointFeature[]>([]);
   const [showSchools, setShowSchools] = useState<boolean>(false);
   const [schoolTypeFilters, setSchoolTypeFilters] = useState<SchoolTypeFilters>(
     Object.keys(SCHOOL_TYPE_COLORS).reduce((acc, key) => ({ ...acc, [key]: true }), {})
@@ -82,109 +77,43 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [isLeftSidebarCollapsed]);
 
-  useEffect(() => {
-    const loadAllData = async () => {
-      try {
-        const [geojsonResponse, schoolsResponse] = await Promise.all([
-            fetch(`${GEOJSON_URL}?_=${new Date().getTime()}`),
-            fetch(SCHOOLS_URL)
-        ]);
+  const showNotification = (message: string, isError: boolean = false) => {
+    setNotification({ message, isError });
+    setTimeout(() => setNotification(null), 3000);
+  };
 
-        if (!geojsonResponse.ok || !schoolsResponse.ok) {
-            throw new Error('Network response was not ok for one or more data files.');
-        }
-        
-        const geojsonData: TownGeoJSON = await geojsonResponse.json();
-        const schoolsDataResponse = await schoolsResponse.json();
-        
-        const newTownData: TownData = {};
-        const newAssignments: Assignments = {};
-        const newSUs: SupervisoryUnions = {};
-        
-        geojsonData.features.forEach(feature => {
-            const props = feature.properties;
-            const townId = props[PROPERTY_KEYS.TOWN_ID];
-            const suName = props[PROPERTY_KEYS.SU] || 'Uncategorized';
-            const studentCount = props[PROPERTY_KEYS.STUDENT_COUNT] || 0;
-            newTownData[townId] = props;
-            newAssignments[townId] = null;
+  const loadStateFromURL = (currentTownData: TownData, currentAssignments: Assignments) => {
+    const params = new URLSearchParams(window.location.search);
+    const data = params.get('data');
+    const result = decodeUrlState(data, currentTownData, currentAssignments);
 
-            if (!newSUs[suName]) {
-                newSUs[suName] = { towns: [], totalStudents: 0 };
-            }
-            newSUs[suName].towns.push(townId);
-            newSUs[suName].totalStudents += studentCount;
-        });
+    switch (result.status) {
+      case 'no-data':
+        setDistrictNames(initializeDistrictNames(districtOrder));
+        break;
+      case 'too-large':
+        showNotification('Failed to load map: URL data is too large.', true);
+        clearDataUrlParam();
+        break;
+      case 'error':
+        console.error('Failed to load state from URL:', result.error);
+        showNotification('Could not load map from URL.', true);
+        clearDataUrlParam();
+        break;
+      case 'success':
+        setDistrictOrder(result.districtOrder);
+        setDistrictNames(result.districtNames);
+        setAssignments(result.assignments);
+        setMapName(result.mapName);
+        break;
+    }
+  };
 
-        setTownData(newTownData);
-        setSupervisoryUnions(newSUs);
-        setTownGeoJSON(geojsonData);
+  const { townData, townGeoJSON, supervisoryUnions, schoolDetails, independentSchoolDetails, schoolsData } = useDistrictBuilderData({
+    onLoaded: loadStateFromURL,
+    onError: (message) => showNotification(message, true),
+  });
 
-        const newSchoolPoints: SchoolPointFeature[] = schoolsDataResponse.features
-          .filter((f: any) => f.geometry && f.geometry.coordinates && f.geometry.coordinates.length === 2)
-          .map((feature: any) => {
-            const [longitude, latitude] = feature.geometry.coordinates;
-            return {
-              type: 'Feature',
-              geometry: feature.geometry,
-              properties: {
-                ...feature.properties,
-                longitude,
-                latitude,
-              },
-            };
-          });
-        setSchoolsData(newSchoolPoints);
-
-        const newSchoolDetails: SchoolDetailsByTown = {};
-        const newIndependentSchoolDetails: SchoolDetailsByTown = {};
-
-        schoolsDataResponse.features.forEach((schoolFeature: any) => {
-            const attrs = schoolFeature.properties;
-            const townName = attrs.town?.toUpperCase();
-
-            if (townName) {
-                const schoolDetail: SchoolDetail = {
-                    NAME: attrs.School, Grades: attrs.Grades, ENROLLMENT: attrs.Enrollment || 0,
-                    TOWN: attrs.town, Type: attrs.Type, yearBuilt: attrs.yearBuilt,
-                    fciCategory: attrs.fciCategory, enrollYear: attrs.enrollYear, PCB_Cat: attrs.PCB_Cat,
-                    '2014Enroll': attrs['2014Enroll'], '2015Enroll': attrs['2015Enroll'],
-                    '2016Enroll': attrs['2016Enroll'], '2017Enroll': attrs['2017Enroll'],
-                    '2018Enroll': attrs['2018Enroll'], '2019Enroll': attrs['2019Enroll'],
-                    '2020Enroll': attrs['2020Enroll'], '2021Enroll': attrs['2021Enroll'],
-                    '2022Enroll': attrs['2022Enroll'],
-                    '2023Enroll': attrs['2023Enroll'],
-                    GradesList: attrs.GradesList,
-                    PK_Adult_2024Enroll: attrs.PK_Adult_2024Enroll,
-                    accessType: attrs.accessType,
-                    latitude: schoolFeature.geometry?.coordinates[1],
-                    longitude: schoolFeature.geometry?.coordinates[0]
-                };
-
-                if (attrs.accessType === 'Public') {
-                    if (!newSchoolDetails[townName]) newSchoolDetails[townName] = [];
-                    newSchoolDetails[townName].push(schoolDetail);
-                } else if (attrs.accessType === 'Independent' && attrs.Notes === 'Approved - Eligible for Public Funding') {
-                    if (!newIndependentSchoolDetails[townName]) newIndependentSchoolDetails[townName] = [];
-                    newIndependentSchoolDetails[townName].push(schoolDetail);
-                }
-            }
-        });
-        setSchoolDetails(newSchoolDetails);
-        setIndependentSchoolDetails(newIndependentSchoolDetails);
-        
-        loadStateFromURL(newTownData, newAssignments);
-
-      } catch (error) {
-        console.error('Error loading or processing application data:', error);
-        showNotification('Failed to load map data. Please try again later.', true);
-      }
-    };
-    
-    loadAllData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  
   const allDistrictStats = useMemo<AllDistrictStats>(() => {
       const stats: AllDistrictStats = {};
       districtOrder.forEach(id => {
@@ -383,41 +312,9 @@ const App: React.FC = () => {
     setDropIndex(null);
   }
 
-  const showNotification = (message: string, isError: boolean = false) => {
-    setNotification({ message, isError });
-    setTimeout(() => setNotification(null), 3000);
-  };
-
   const generateShareableString = useCallback(() => {
     return buildShareableString({ districtOrder, assignments, townData, districtNames, mapName });
   }, [assignments, districtOrder, mapName, townData, districtNames]);
-
-  const loadStateFromURL = (currentTownData: TownData, currentAssignments: Assignments) => {
-    const params = new URLSearchParams(window.location.search);
-    const data = params.get('data');
-    const result = decodeUrlState(data, currentTownData, currentAssignments);
-
-    switch (result.status) {
-      case 'no-data':
-        setDistrictNames(initializeDistrictNames(districtOrder));
-        break;
-      case 'too-large':
-        showNotification('Failed to load map: URL data is too large.', true);
-        clearDataUrlParam();
-        break;
-      case 'error':
-        console.error('Failed to load state from URL:', result.error);
-        showNotification('Could not load map from URL.', true);
-        clearDataUrlParam();
-        break;
-      case 'success':
-        setDistrictOrder(result.districtOrder);
-        setDistrictNames(result.districtNames);
-        setAssignments(result.assignments);
-        setMapName(result.mapName);
-        break;
-    }
-  };
 
   const copyShareURLToClipboard = useCallback(() => {
     const shareableString = generateShareableString();
