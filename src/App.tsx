@@ -5,7 +5,7 @@ import L from 'leaflet';
 import html2canvas from 'html2canvas';
 import 'leaflet/dist/leaflet.css';
 import {
-  Tab, TownData, Assignments, AllDistrictStats, DistrictNames, ReportData, SchoolTypeFilters
+  Tab, Assignments, AllDistrictStats, DistrictNames, ReportData, SchoolTypeFilters
 } from './types';
 import {
   PROPERTY_KEYS, MAX_DISTRICTS, INITIAL_DISTRICTS, districtColors, SCHOOL_TYPE_COLORS
@@ -17,18 +17,13 @@ import ReportComponent from './components/ReportComponent';
 import HelpModal from './components/HelpModal';
 import SplashScreen from './components/SplashScreen';
 import { escapeHtml, sanitizeCsvCell } from './utils'; // Import sanitization functions
-import { generateShareableString as buildShareableString, loadStateFromURL as decodeUrlState, initializeDistrictNames } from './urlState';
+import { initializeDistrictNames } from './urlState';
 import { buildReportData } from './reportData';
 import { useDistrictBuilderData } from './hooks/useDistrictBuilderData';
+import { useUrlStateSync } from './hooks/useUrlStateSync';
 import type { Map } from 'leaflet';
 
 const DISCLAIMER_VERSION = '1.0'; // Version for the disclaimer acknowledgment
-
-const clearDataUrlParam = () => {
-    const url = new URL(window.location.toString());
-    url.searchParams.delete('data');
-    window.history.replaceState({}, '', url);
-};
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'map' | 'report'>('map');
@@ -82,37 +77,21 @@ const App: React.FC = () => {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const loadStateFromURL = (currentTownData: TownData, currentAssignments: Assignments) => {
-    const params = new URLSearchParams(window.location.search);
-    const data = params.get('data');
-    const result = decodeUrlState(data, currentTownData, currentAssignments);
-
-    switch (result.status) {
-      case 'no-data':
-        setDistrictNames(initializeDistrictNames(districtOrder));
-        break;
-      case 'too-large':
-        showNotification('Failed to load map: URL data is too large.', true);
-        clearDataUrlParam();
-        break;
-      case 'error':
-        console.error('Failed to load state from URL:', result.error);
-        showNotification('Could not load map from URL.', true);
-        clearDataUrlParam();
-        break;
-      case 'success':
-        setDistrictOrder(result.districtOrder);
-        setDistrictNames(result.districtNames);
-        setAssignments(result.assignments);
-        setMapName(result.mapName);
-        break;
-    }
-  };
-
-  const { townData, townGeoJSON, supervisoryUnions, schoolDetails, independentSchoolDetails, schoolsData } = useDistrictBuilderData({
-    onLoaded: loadStateFromURL,
+  const { townData, townGeoJSON, supervisoryUnions, schoolDetails, independentSchoolDetails, schoolsData, initialAssignments } = useDistrictBuilderData({
     onError: (message) => showNotification(message, true),
   });
+
+  const { loadStateFromURL, copyShareURLToClipboard } = useUrlStateSync({
+    districtOrder, assignments, townData, districtNames, mapName,
+    setDistrictOrder, setDistrictNames, setAssignments, setMapName, showNotification,
+  });
+
+  useEffect(() => {
+    if (!townGeoJSON) return; // wait for useDistrictBuilderData's fetch to complete
+    loadStateFromURL(townData, initialAssignments);
+    // Runs once, when the fetched data first becomes available.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [townGeoJSON]);
 
   const allDistrictStats = useMemo<AllDistrictStats>(() => {
       const stats: AllDistrictStats = {};
@@ -312,21 +291,10 @@ const App: React.FC = () => {
     setDropIndex(null);
   }
 
-  const generateShareableString = useCallback(() => {
-    return buildShareableString({ districtOrder, assignments, townData, districtNames, mapName });
-  }, [assignments, districtOrder, mapName, townData, districtNames]);
-
-  const copyShareURLToClipboard = useCallback(() => {
-    const shareableString = generateShareableString();
-    const url = new URL(window.location.toString());
-    url.searchParams.set('data', shareableString);
-    navigator.clipboard.writeText(url.href).then(() => {
-        showNotification('Shareable link copied to clipboard!');
-    }, () => {
-        showNotification('Failed to copy link.', true);
-    });
+  const handleCopyShareURL = useCallback(() => {
+    copyShareURLToClipboard();
     setExportShareModalOpen(false);
-  }, [generateShareableString]);
+  }, [copyShareURLToClipboard]);
 
   const exportAssignmentsToCsv = useCallback(() => {
     let csvContent = "TOWNNAME,COUNTY,DISTRICT_ID,DISTRICT_NAME,PUBLIC_SCHOOL_STUDENTS,Public_Schools,Total_E_Ed_GL_Act73\r\n";
@@ -709,7 +677,7 @@ const App: React.FC = () => {
                           <button onClick={handleExportJpg} className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">JPG Image</button>
                           <button onClick={exportAssignmentsToCsv} className="w-full bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded">CSV Assignments</button>
                           <button onClick={exportToGeoJSON} className="w-full bg-orange-500 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded">GeoJSON</button>
-                          <button onClick={copyShareURLToClipboard} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Copy Shareable Link</button>
+                          <button onClick={handleCopyShareURL} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Copy Shareable Link</button>
                       </div>
                       <button onClick={() => setExportShareModalOpen(false)} className="mt-8 w-full text-sm text-gray-600 hover:text-gray-800 py-2">Close</button>
                   </div>

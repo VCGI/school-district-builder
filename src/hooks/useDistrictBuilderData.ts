@@ -1,9 +1,10 @@
 // src/hooks/useDistrictBuilderData.ts
 // Owns the one-shot mount-time fetch of town/school reference data from the S3 GeoJSON sources
 // (see GEOJSON_URL/SCHOOLS_URL in constants.ts) and derives the town/SU/school lookups the rest
-// of the app reads from. Extracted from App.tsx so the fetch effect no longer forward-references
-// consts declared later in the component (loadStateFromURL, showNotification) -- callers are
-// notified via onLoaded/onError instead.
+// of the app reads from, plus the all-null `initialAssignments` map derived from the fetched towns.
+// Exposing initialAssignments as a return value (rather than an onLoaded callback) lets callers
+// react to data becoming available via a plain effect, avoiding a forward-reference to logic
+// declared later in App.tsx.
 import { useEffect, useState } from 'react';
 import { GEOJSON_URL, SCHOOLS_URL, PROPERTY_KEYS } from '../constants';
 import type {
@@ -17,20 +18,21 @@ export interface DistrictBuilderData {
   schoolDetails: SchoolDetailsByTown;
   independentSchoolDetails: SchoolDetailsByTown;
   schoolsData: SchoolPointFeature[];
+  initialAssignments: Assignments;
 }
 
 export interface UseDistrictBuilderDataParams {
-  onLoaded: (townData: TownData, assignments: Assignments) => void;
   onError: (message: string) => void;
 }
 
-export const useDistrictBuilderData = ({ onLoaded, onError }: UseDistrictBuilderDataParams): DistrictBuilderData => {
+export const useDistrictBuilderData = ({ onError }: UseDistrictBuilderDataParams): DistrictBuilderData => {
   const [townData, setTownData] = useState<TownData>({});
   const [townGeoJSON, setTownGeoJSON] = useState<TownGeoJSON | null>(null);
   const [supervisoryUnions, setSupervisoryUnions] = useState<SupervisoryUnions>({});
   const [schoolDetails, setSchoolDetails] = useState<SchoolDetailsByTown>({});
   const [independentSchoolDetails, setIndependentSchoolDetails] = useState<SchoolDetailsByTown>({});
   const [schoolsData, setSchoolsData] = useState<SchoolPointFeature[]>([]);
+  const [initialAssignments, setInitialAssignments] = useState<Assignments>({});
 
   useEffect(() => {
     const loadAllData = async () => {
@@ -122,8 +124,7 @@ export const useDistrictBuilderData = ({ onLoaded, onError }: UseDistrictBuilder
         });
         setSchoolDetails(newSchoolDetails);
         setIndependentSchoolDetails(newIndependentSchoolDetails);
-
-        onLoaded(newTownData, newAssignments);
+        setInitialAssignments(newAssignments);
 
       } catch (error) {
         console.error('Error loading or processing application data:', error);
@@ -132,9 +133,9 @@ export const useDistrictBuilderData = ({ onLoaded, onError }: UseDistrictBuilder
     };
 
     loadAllData();
-    // Intentionally runs once on mount; onLoaded/onError are read at call time via closure.
+    // Intentionally runs once on mount; onError is read at call time via closure.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { townData, townGeoJSON, supervisoryUnions, schoolDetails, independentSchoolDetails, schoolsData };
+  return { townData, townGeoJSON, supervisoryUnions, schoolDetails, independentSchoolDetails, schoolsData, initialAssignments };
 };
