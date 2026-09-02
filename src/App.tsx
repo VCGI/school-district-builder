@@ -20,21 +20,23 @@ import { useUrlStateSync } from './hooks/useUrlStateSync';
 import { useMapViewState } from './hooks/useMapViewState';
 import { useDistrictAssignments } from './hooks/useDistrictAssignments';
 import { useExports } from './hooks/useExports';
-
-const DISCLAIMER_VERSION = '1.0'; // Version for the disclaimer acknowledgment
+import { useNotification } from './hooks/useNotification';
+import { useModals } from './hooks/useModals';
 
 const App: React.FC = () => {
   const [reportData, setReportData] = useState<ReportData[]>([]);
   const [unassignedTownsCount, setUnassignedTownsCount] = useState<number>(0);
 
   const [mapName, setMapName] = useState<string>('');
-  const [isExportShareModalOpen, setExportShareModalOpen] = useState<boolean>(false);
-  const [isImportModalOpen, setImportModalOpen] = useState<boolean>(false);
-  const [notification, setNotification] = useState<{ message: string; isError: boolean } | null>(null);
-  const [isHelpModalOpen, setHelpModalOpen] = useState<boolean>(false);
-  const [showSplashScreen, setShowSplashScreen] = useState<boolean>(
-    localStorage.getItem('disclaimerAcknowledged') !== DISCLAIMER_VERSION
-  );
+
+  const { notification, showNotification } = useNotification();
+
+  const {
+    isExportShareModalOpen, setExportShareModalOpen,
+    isImportModalOpen, setImportModalOpen,
+    isHelpModalOpen, setHelpModalOpen,
+    showSplashScreen, handleAcknowledgeSplash,
+  } = useModals();
 
   const {
     currentView, setCurrentView,
@@ -48,11 +50,6 @@ const App: React.FC = () => {
   } = useMapViewState();
 
   const modalRoot = document.getElementById('modal-root');
-
-  const showNotification = (message: string, isError: boolean = false) => {
-    setNotification({ message, isError });
-    setTimeout(() => setNotification(null), 3000);
-  };
 
   const { townData, townGeoJSON, supervisoryUnions, schoolDetails, independentSchoolDetails, schoolsData, initialAssignments } = useDistrictBuilderData({
     onError: (message) => showNotification(message, true),
@@ -105,17 +102,10 @@ const App: React.FC = () => {
 
   const sortedSUs = useMemo(() => Object.keys(supervisoryUnions).sort(), [supervisoryUnions]);
 
-  const handleAcknowledgeSplash = (dontShowAgain: boolean) => {
-    if (dontShowAgain) {
-      localStorage.setItem('disclaimerAcknowledged', DISCLAIMER_VERSION);
-    }
-    setShowSplashScreen(false);
-  };
-  
   const handleCopyShareURL = useCallback(() => {
     copyShareURLToClipboard();
     setExportShareModalOpen(false);
-  }, [copyShareURLToClipboard]);
+  }, [copyShareURLToClipboard, setExportShareModalOpen]);
 
   const { exportAssignmentsToCsv, exportToGeoJSON, handleExportJpg } = useExports({
     assignments, townData, townGeoJSON, mapName, districtNames, districtOrder, allDistrictStats,
@@ -133,7 +123,7 @@ const App: React.FC = () => {
     setCurrentView('report');
     setExportShareModalOpen(false);
 
-  }, [districtOrder, allDistrictStats, districtNames, townData, schoolDetails, independentSchoolDetails, assignments, supervisoryUnions, setCurrentView]);
+  }, [districtOrder, allDistrictStats, districtNames, townData, schoolDetails, independentSchoolDetails, assignments, supervisoryUnions, setCurrentView, setExportShareModalOpen]);
 
   const handleFileImport = (file: File) => {
     if (!file || !file.type.match('text/csv')) {
