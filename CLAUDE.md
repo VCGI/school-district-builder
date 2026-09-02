@@ -24,15 +24,24 @@ CI (`.github/workflows/ci.yml`) runs lint, test, and build on every PR and push 
 
 ## Architecture
 
-### Everything flows through `src/App.tsx`
+### `src/App.tsx` composes state from custom hooks
 
-`App.tsx` (~1150 lines) is the single owner of nearly all application state — town/district assignments, map view state, modal/UI state, and URL-sharing state — passed down as props/callbacks to `LeftSidebar`, `RightSidebar`, `MapComponent`, and `ReportComponent`. There is no Context, Redux, or Zustand: state changes flow one level down as props and one level up as callbacks (e.g. `onTownClick`, `onDistrictNameChange`). When working on a feature that touches state, expect to trace it through `App.tsx` first — the child components are largely presentational plus their own local UI-only state (e.g. sort order in `ReportComponent`).
+`App.tsx` (~340 lines) no longer owns state directly — it composes seven custom hooks under `src/hooks/`, each scoped to one cluster of the app's domain, and passes the combined values down as props/callbacks to `LeftSidebar`, `RightSidebar`, `MapComponent`, and `ReportComponent`. There is no Context, Redux, or Zustand: state changes still flow one level down as props and one level up as callbacks (e.g. `onTownClick`, `onDistrictNameChange`) — only the *ownership* of state moved out of the component body. When working on a feature that touches state, find the hook that owns it first (see below), then trace props from `App.tsx` outward.
 
-Key state/logic groupings inside `App.tsx`, useful for orienting before editing:
-- **Data loading**: a mount-time `useEffect` fetches `GEOJSON_URL` and `SCHOOLS_URL` (see `src/constants.ts`) and derives `townData`, `supervisoryUnions`, `schoolDetails`, `independentSchoolDetails` from the raw GeoJSON.
-- **District/assignment domain state**: `assignments` (town name -> district id or null), `districtOrder`, `districtNames`, plus handlers for town/SU clicks, add/delete/reorder districts, CSV import, and preset geographies (Counties/RPCs).
-- **URL state sync**: `generateShareableString`/`loadStateFromURL` serialize the current assignments/names/map name using hand-rolled Base62 encoding (`toBase62`/`fromBase62`, `BASE62_CHARS` in `constants.ts`) + Run-Length Encoding, then gzip via `pako` and base64 into a `data` URL param, so a whole map configuration is shareable via link. A legacy "V7" format is decoded for backwards compatibility with older shared URLs — don't remove that fallback without checking whether old links still need to resolve.
-- **Report generation**: `handleGenerateReport` aggregates per-district stats (ADM, Grand List totals, FCI/enrollment buckets, SU/RPC intact-vs-divided status) into `ReportData[]` (shape defined in `src/types.ts`), consumed by `ReportComponent.tsx`.
+Hooks, in the order `App.tsx` calls them (later hooks may depend on earlier ones' return values — `useDistrictAssignments` needs `townData`/`supervisoryUnions` from `useDistrictBuilderData`, `useUrlStateSync` needs setters from `useDistrictAssignments`):
+- **`useMapViewState`** — map/UI view: `currentView`, `activeTab`, `hoveredDistrict`, `hoveredSU`, `showSchools`, `schoolTypeFilters`, `isLeftSidebarCollapsed`, `mapRef`.
+- **`useNotification`** — the single toast/banner `notification` state and `showNotification`.
+- **`useModals`** — `isExportShareModalOpen`, `isImportModalOpen`, `isHelpModalOpen`, `showSplashScreen`/`DISCLAIMER_VERSION`.
+- **`useDistrictBuilderData({ onError })`** — one-shot mount-time fetch of `GEOJSON_URL`/`SCHOOLS_URL` (see `src/constants.ts`); derives and returns `townData`, `townGeoJSON`, `supervisoryUnions`, `schoolDetails`, `independentSchoolDetails`, `schoolsData`, `initialAssignments`. Returns `initialAssignments` as a plain value rather than taking a load callback, specifically so `useUrlStateSync` (below) can consume it without the two hooks needing to reference each other's setters — don't reintroduce a callback here without checking for that circularity.
+- **`useDistrictAssignments({ townData, supervisoryUnions, setMapName, showNotification })`** — the largest cluster: `assignments` (town name -> district id or null), `districtNames`, `districtOrder`, `activeDistrict`, `districtToDelete`, `draggedDistrict`, `dropIndex`, and handlers for town/SU clicks, add/delete/reorder districts, CSV import (`parseCSV`), and preset geographies (Counties/RPCs).
+- **`useUrlStateSync({ ...assignment state, setters, showNotification })`** — wraps the pure `src/urlState.ts` module (see below) to load/generate the shareable `data` URL param against live App state; returns `generateShareableString`, `loadStateFromURL`, `copyShareURLToClipboard`. `App.tsx` invokes `loadStateFromURL` itself from a `useEffect` keyed on `townGeoJSON` being loaded, rather than the hook doing it internally, again to avoid a circular dependency with `useDistrictBuilderData`.
+- **`useExports({ ...state, showNotification, setExportShareModalOpen })`** — `exportAssignmentsToCsv`, `exportToGeoJSON`, `handleExportJpg` (DOM/Blob/Leaflet-imperative side effects, not unit-tested — verify these manually).
+
+Pure logic lives outside the hooks in plain modules, which are unit-tested (see Testing below):
+- **`src/urlState.ts`** — `toBase62`/`fromBase62`, `generateShareableString`, `loadStateFromURL`. Serializes assignments/names/map name using hand-rolled Base62 encoding (`BASE62_CHARS` in `constants.ts`) + Run-Length Encoding, then gzip via `pako` and base64 into the `data` URL param. A legacy "V7" format is decoded for backwards compatibility with older shared URLs — don't remove that fallback without checking whether old links still need to resolve. `loadStateFromURL` returns a discriminated union (`{status: 'no-data'|'too-large'|'error'|'success', ...}`) rather than calling setters directly.
+- **`src/reportData.ts`** — `buildReportData(...)` aggregates per-district stats (ADM, Grand List totals, FCI/enrollment buckets, SU/RPC intact-vs-divided status) into `ReportData[]` (shape defined in `src/types.ts`), called from `App.tsx`'s `handleGenerateReport` and consumed by `ReportComponent.tsx`.
+- **`src/reportView.ts`** — `processReportData`, `sortByAdmDescending`, `sortByGrandListPerStudentDescending`, `computeMaxValues`, `buildReportCsv`: the derived-value/sorting/CSV logic behind `ReportComponent.tsx`'s charts, table, and CSV export.
+- **`src/schoolGrouping.ts`** — `groupSchoolsByType`, `sortSchoolTypes`: groups/orders a district's schools by type, used by `RightSidebar.tsx`'s expanded district cards.
 
 ### Data model
 
@@ -46,8 +55,8 @@ Two upstream S3 JSON sources define the entire data model (schemas documented in
 
 ### Export paths
 
-Three distinct export mechanisms live in `App.tsx`/`ReportComponent.tsx`, each with different risk profiles: CSV export (town assignments and report tables, sanitized via `escapeHtml`/`sanitizeCsvCell` in `src/utils.ts` to prevent CSV formula injection), GeoJSON export, and JPG map export via `html2canvas`. The shareable-URL mechanism above is a fourth, distinct "export" of state.
+Three distinct export mechanisms live in `useExports` (see above) and `ReportComponent.tsx`, each with different risk profiles: CSV export (town assignments and report tables, sanitized via `escapeHtml`/`sanitizeCsvCell` in `src/utils.ts` to prevent CSV formula injection), GeoJSON export, and JPG map export via `html2canvas`. The shareable-URL mechanism above is a fourth, distinct "export" of state.
 
 ## Testing
 
-Vitest is configured to reuse the existing Vite config; no `jsdom` environment is set up yet (only pure-logic/node-environment tests exist so far, e.g. `src/utils.test.ts`). If you add component-level tests, add `@testing-library/react` and a `jsdom` environment at that point rather than assuming it's already available.
+Vitest is configured to reuse the existing Vite config; no `jsdom` environment is set up yet — all current tests are pure-logic/node-environment tests over the extracted modules above (`src/utils.test.ts`, `src/urlState.test.ts`, `src/reportData.test.ts`, `src/reportView.test.ts`, `src/schoolGrouping.test.ts`). If you add component-level tests, add `@testing-library/react` and a `jsdom` environment at that point rather than assuming it's already available.
