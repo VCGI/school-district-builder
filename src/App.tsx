@@ -1,14 +1,14 @@
 // src/App.tsx
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import html2canvas from 'html2canvas';
 import 'leaflet/dist/leaflet.css';
 import {
-  Tab, Assignments, AllDistrictStats, DistrictNames, ReportData, SchoolTypeFilters
+  Assignments, AllDistrictStats, DistrictNames, ReportData
 } from './types';
 import {
-  PROPERTY_KEYS, MAX_DISTRICTS, INITIAL_DISTRICTS, districtColors, SCHOOL_TYPE_COLORS
+  PROPERTY_KEYS, MAX_DISTRICTS, INITIAL_DISTRICTS, districtColors
 } from './constants';
 import LeftSidebar from './components/LeftSidebar';
 import RightSidebar from './components/RightSidebar';
@@ -21,56 +21,43 @@ import { initializeDistrictNames } from './urlState';
 import { buildReportData } from './reportData';
 import { useDistrictBuilderData } from './hooks/useDistrictBuilderData';
 import { useUrlStateSync } from './hooks/useUrlStateSync';
-import type { Map } from 'leaflet';
+import { useMapViewState } from './hooks/useMapViewState';
 
 const DISCLAIMER_VERSION = '1.0'; // Version for the disclaimer acknowledgment
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'map' | 'report'>('map');
   const [reportData, setReportData] = useState<ReportData[]>([]);
   const [unassignedTownsCount, setUnassignedTownsCount] = useState<number>(0);
 
   const [assignments, setAssignments] = useState<Assignments>({});
   const [districtNames, setDistrictNames] = useState<DistrictNames>({});
   const [districtOrder, setDistrictOrder] = useState<number[]>(() => Array.from({ length: INITIAL_DISTRICTS }, (_, i) => i + 1));
-  const [showSchools, setShowSchools] = useState<boolean>(false);
-  const [schoolTypeFilters, setSchoolTypeFilters] = useState<SchoolTypeFilters>(
-    Object.keys(SCHOOL_TYPE_COLORS).reduce((acc, key) => ({ ...acc, [key]: true }), {})
-  );
 
   const [activeDistrict, setActiveDistrict] = useState<number>(1);
   const [mapName, setMapName] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<Tab>(Tab.About);
-  const [hoveredDistrict, setHoveredDistrict] = useState<number | null>(null);
-  const [hoveredSU, setHoveredSU] = useState<string | null>(null);
   const [isExportShareModalOpen, setExportShareModalOpen] = useState<boolean>(false);
   const [isImportModalOpen, setImportModalOpen] = useState<boolean>(false);
   const [notification, setNotification] = useState<{ message: string; isError: boolean } | null>(null);
   const [districtToDelete, setDistrictToDelete] = useState<number | null>(null);
   const [draggedDistrict, setDraggedDistrict] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const [isLeftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   const [isHelpModalOpen, setHelpModalOpen] = useState<boolean>(false);
   const [showSplashScreen, setShowSplashScreen] = useState<boolean>(
     localStorage.getItem('disclaimerAcknowledged') !== DISCLAIMER_VERSION
   );
-  const mapRef = useRef<Map | null>(null);
+
+  const {
+    currentView, setCurrentView,
+    activeTab, setActiveTab,
+    hoveredDistrict, setHoveredDistrict,
+    hoveredSU, setHoveredSU,
+    showSchools, toggleSchools,
+    schoolTypeFilters, handleSchoolFilterChange,
+    isLeftSidebarCollapsed, toggleLeftSidebar,
+    mapRef,
+  } = useMapViewState();
 
   const modalRoot = document.getElementById('modal-root');
-
-  const handleSchoolFilterChange = (schoolType: string) => {
-    setSchoolTypeFilters(prev => ({
-      ...prev,
-      [schoolType]: !prev[schoolType]
-    }));
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      mapRef.current?.invalidateSize();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [isLeftSidebarCollapsed]);
 
   const showNotification = (message: string, isError: boolean = false) => {
     setNotification({ message, isError });
@@ -390,7 +377,7 @@ const App: React.FC = () => {
     setCurrentView('report');
     setExportShareModalOpen(false);
 
-  }, [districtOrder, allDistrictStats, districtNames, townData, schoolDetails, independentSchoolDetails, assignments, supervisoryUnions]);
+  }, [districtOrder, allDistrictStats, districtNames, townData, schoolDetails, independentSchoolDetails, assignments, supervisoryUnions, setCurrentView]);
 
   const handleExportJpg = useCallback(async () => {
       setExportShareModalOpen(false);
@@ -564,7 +551,7 @@ const App: React.FC = () => {
         <div className="hidden lg:flex flex-row h-screen w-screen bg-gray-200">
           <LeftSidebar
             isCollapsed={isLeftSidebarCollapsed}
-            toggleCollapse={() => setLeftSidebarCollapsed(!isLeftSidebarCollapsed)}
+            toggleCollapse={toggleLeftSidebar}
             activeTab={activeTab}
             onTabChange={setActiveTab}
             sortedSUs={sortedSUs}
@@ -589,7 +576,7 @@ const App: React.FC = () => {
                       onMapReady={(map) => { mapRef.current = map; }}
                       schoolsData={schoolsData}
                       showSchools={showSchools}
-                      onToggleSchools={() => setShowSchools(prev => !prev)}
+                      onToggleSchools={toggleSchools}
                       schoolTypeFilters={schoolTypeFilters}
                       onSchoolFilterChange={handleSchoolFilterChange}
                   />
