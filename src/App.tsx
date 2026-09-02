@@ -2,14 +2,13 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import L from 'leaflet';
-import pako from 'pako';
 import html2canvas from 'html2canvas';
 import 'leaflet/dist/leaflet.css';
 import {
-  Tab, TownData, Assignments, SupervisoryUnions, TownGeoJSON, AllDistrictStats, DistrictNames, SchoolDetailsByTown, ReportData, SchoolDetail, SchoolPointFeature, SchoolTypeFilters, TownProperties
+  Tab, TownData, Assignments, SupervisoryUnions, TownGeoJSON, AllDistrictStats, DistrictNames, SchoolDetailsByTown, ReportData, SchoolDetail, SchoolPointFeature, SchoolTypeFilters
 } from './types';
 import {
-  GEOJSON_URL, SCHOOLS_URL, PROPERTY_KEYS, MAX_DISTRICTS, INITIAL_DISTRICTS, districtColors, BASE62_CHARS, SCHOOL_TYPE_COLORS
+  GEOJSON_URL, SCHOOLS_URL, PROPERTY_KEYS, MAX_DISTRICTS, INITIAL_DISTRICTS, districtColors, SCHOOL_TYPE_COLORS
 } from './constants';
 import LeftSidebar from './components/LeftSidebar';
 import RightSidebar from './components/RightSidebar';
@@ -18,36 +17,16 @@ import ReportComponent from './components/ReportComponent';
 import HelpModal from './components/HelpModal';
 import SplashScreen from './components/SplashScreen';
 import { escapeHtml, sanitizeCsvCell } from './utils'; // Import sanitization functions
+import { generateShareableString as buildShareableString, loadStateFromURL as decodeUrlState, initializeDistrictNames } from './urlState';
+import { buildReportData } from './reportData';
 import type { Map } from 'leaflet';
 
 const DISCLAIMER_VERSION = '1.0'; // Version for the disclaimer acknowledgment
 
-// Utility Functions for URL State
-const toBase62 = (num: number) => {
-    if (num === 0) return '0';
-    let s = '';
-    while (num > 0) { s = BASE62_CHARS[num % 62] + s; num = Math.floor(num / 62); }
-    return s;
-};
-const fromBase62 = (str: string) => {
-    let num = 0;
-    for (let i = 0; i < str.length; i++) {
-        const charIndex = BASE62_CHARS.indexOf(str[i]);
-        if (charIndex === -1) {
-            console.error(`Invalid character in Base62 string: ${str[i]}`);
-            throw new Error("Malformed Base62 string");
-        }
-        num = num * 62 + charIndex;
-    }
-    return num;
-};
-
-const initializeDistrictNames = (order: number[], values?: (string | null)[]) => {
-    const initialNames: DistrictNames = {};
-    order.forEach((id, index) => {
-        initialNames[id] = values && values[index] ? values[index]! : `District ${id}`;
-    });
-    return initialNames;
+const clearDataUrlParam = () => {
+    const url = new URL(window.location.toString());
+    url.searchParams.delete('data');
+    window.history.replaceState({}, '', url);
 };
 
 const App: React.FC = () => {
@@ -410,176 +389,33 @@ const App: React.FC = () => {
   };
 
   const generateShareableString = useCallback(() => {
-    const version = 'V8';
-    const separator = '|';
-    
-    const orderedDistrictData = districtOrder.map(id => {
-      const towns = Object.entries(assignments)
-        .filter(([, districtId]) => districtId === id)
-        .map(([townName]) => townData[townName]?.OBJECTID)
-        .filter(objId => objId !== undefined)
-        .sort((a,b) => a-b);
-      
-      const districtName = districtNames[id] || `District ${id}`;
-      return { id, name: districtName, towns };
-    });
-
-    const districtStrings = orderedDistrictData.map(dist => {
-      const rleRuns = [];
-      if (dist.towns.length > 0) {
-          let startId = dist.towns[0], endId = dist.towns[0];
-          for (let i = 1; i < dist.towns.length; i++) {
-              if (dist.towns[i] === endId + 1) {
-                  endId = dist.towns[i];
-              } else {
-                  rleRuns.push(startId === endId ? toBase62(startId) : `${toBase62(startId)}~${toBase62(endId - startId)}`);
-                  startId = endId = dist.towns[i];
-              }
-          }
-          rleRuns.push(startId === endId ? toBase62(startId) : `${toBase62(startId)}~${toBase62(endId - startId)}`);
-      }
-      return `${toBase62(dist.id)},${encodeURIComponent(dist.name)},${rleRuns.join('.')}`;
-    }).join(';');
-
-    const payloadParts = [version, encodeURIComponent(mapName), districtStrings];
-    const payloadString = payloadParts.join(separator);
-
-    const compressed = pako.deflate(payloadString, { level: 9 });
-    let binaryString = '';
-    for (let i = 0; i < compressed.length; i++) {
-        binaryString += String.fromCharCode(compressed[i]);
-    }
-    return btoa(binaryString).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return buildShareableString({ districtOrder, assignments, townData, districtNames, mapName });
   }, [assignments, districtOrder, mapName, townData, districtNames]);
 
   const loadStateFromURL = (currentTownData: TownData, currentAssignments: Assignments) => {
     const params = new URLSearchParams(window.location.search);
     const data = params.get('data');
+    const result = decodeUrlState(data, currentTownData, currentAssignments);
 
-    const MAX_URL_STATE_LENGTH = 20480; // 20 KB limit
-    if (data && data.length > MAX_URL_STATE_LENGTH) {
+    switch (result.status) {
+      case 'no-data':
+        setDistrictNames(initializeDistrictNames(districtOrder));
+        break;
+      case 'too-large':
         showNotification('Failed to load map: URL data is too large.', true);
-        const url = new URL(window.location.toString());
-        url.searchParams.delete('data');
-        window.history.replaceState({}, '', url);
-        return;
-    }
-
-    if (!data) {
-      setDistrictNames(initializeDistrictNames(districtOrder));
-      return;
-    }
-
-    try {
-        const base64 = data.replace(/-/g, '+').replace(/_/g, '/');
-        const binaryString = atob(base64);
-        const compressed = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) compressed[i] = binaryString.charCodeAt(i);
-        
-        const decodedString = pako.inflate(compressed, { to: 'string' });
-        
-        const objectIdToTownIdMap: { [key: number]: string } = {};
-        for (const townId in currentTownData) objectIdToTownIdMap[currentTownData[townId].OBJECTID] = townId;
-        
-        const parts = decodedString.split('|');
-        const version = parts[0];
-
-        if (version === 'V8') {
-            const loadedMapName = decodeURIComponent(parts[1] || '');
-            const districtDataStr = parts[2] || '';
-            const newOrder: number[] = [];
-            const newNames: DistrictNames = {};
-            const newAssignments = { ...currentAssignments };
-            Object.keys(newAssignments).forEach(key => newAssignments[key] = null);
-
-            if (districtDataStr) {
-              districtDataStr.split(';').forEach(entry => {
-                const [idStr, nameStr, townsStr] = entry.split(',');
-                const districtId = fromBase62(idStr);
-                const districtName = decodeURIComponent(nameStr);
-                
-                newOrder.push(districtId);
-                newNames[districtId] = districtName;
-
-                if (townsStr) {
-                  townsStr.split('.').forEach(run => {
-                    if (run.includes('~')) {
-                      const [startIdStr, runLengthStr] = run.split('~');
-                      const startId = fromBase62(startIdStr);
-                      const runLength = fromBase62(runLengthStr);
-                      for (let i = 0; i <= runLength; i++) {
-                          const townId = objectIdToTownIdMap[startId + i];
-                          if (townId) newAssignments[townId] = districtId;
-                      }
-                    } else {
-                        const objId = fromBase62(run);
-                        const townId = objectIdToTownIdMap[objId];
-                        if (townId) newAssignments[townId] = districtId;
-                    }
-                  });
-                }
-              });
-            }
-            setDistrictOrder(newOrder);
-            setDistrictNames(newNames);
-            setAssignments(newAssignments);
-            setMapName(loadedMapName);
-
-        } else { // Fallback for old V7 URLs
-            const numDistricts = fromBase62(parts[1]);
-            const assignmentsString = parts[2] || '';
-            const loadedMapName = decodeURIComponent(parts[3] || '');
-            const districtNamesStr = parts[4] || '';
-            
-            const newOrder = Array.from({length: numDistricts}, (_,i) => i + 1);
-            const loadedNames = initializeDistrictNames(newOrder);
-
-            setDistrictOrder(newOrder);
-            setMapName(loadedMapName);
-
-            if (districtNamesStr) {
-                const decodedNames = districtNamesStr.split(';');
-                decodedNames.forEach((name, index) => {
-                    if(index < newOrder.length) {
-                        loadedNames[newOrder[index]] = decodeURIComponent(name);
-                    }
-                });
-            }
-            setDistrictNames(loadedNames);
-
-            const newAssignments = { ...currentAssignments };
-            if (assignmentsString) {
-                for (const entry of assignmentsString.split(';')) {
-                    if (!entry) continue;
-                    const [districtIdStr, runsStr] = entry.split(':');
-                    const districtId = fromBase62(districtIdStr);
-                    if (!districtId || !runsStr) continue;
-                    
-                    for (const run of runsStr.split(',')) {
-                        if (run.includes('~')) {
-                            const [startIdStr, runLengthStr] = run.split('~');
-                            const startId = fromBase62(startIdStr);
-                            const runLength = fromBase62(runLengthStr);
-                            for (let i = 0; i <= runLength; i++) {
-                                const townId = objectIdToTownIdMap[startId + i];
-                                if (townId) newAssignments[townId] = districtId;
-                            }
-                        } else {
-                            const objId = fromBase62(run);
-                            const townId = objectIdToTownIdMap[objId];
-                            if (townId) newAssignments[townId] = districtId;
-                        }
-                    }
-                }
-            }
-            setAssignments(newAssignments);
-        }
-    } catch (e) {
-        console.error("Failed to load state from URL:", e);
+        clearDataUrlParam();
+        break;
+      case 'error':
+        console.error('Failed to load state from URL:', result.error);
         showNotification('Could not load map from URL.', true);
-        const url = new URL(window.location.toString());
-        url.searchParams.delete('data');
-        window.history.replaceState({}, '', url);
+        clearDataUrlParam();
+        break;
+      case 'success':
+        setDistrictOrder(result.districtOrder);
+        setDistrictNames(result.districtNames);
+        setAssignments(result.assignments);
+        setMapName(result.mapName);
+        break;
     }
   };
 
@@ -679,125 +515,10 @@ const App: React.FC = () => {
   }, [assignments, townGeoJSON, mapName, districtNames]);
 
   const handleGenerateReport = useCallback(() => {
-    const dataForReport = districtOrder
-      .map(id => {
-          const stats = allDistrictStats[id];
-          if (!stats || stats.townCount === 0) return null;
+    const dataForReport = buildReportData({
+      districtOrder, allDistrictStats, districtNames, townData, schoolDetails, independentSchoolDetails, assignments, supervisoryUnions,
+    });
 
-          const districtName = districtNames[id] || `District ${id}`;
-          
-          const townsWithAdm = stats.towns.map(townName => {
-              const townProps = townData[townName];
-              return {
-                  name: townName,
-                  adm: townProps?.['Public_School_Students'] || 0,
-                  county: townProps?.County || 'N/A',
-                  totalEEdGL: townProps?.Total_E_Ed_GL_Act73 || 0,
-                  Home_E_Ed_GL_Act73: townProps?.Home_E_Ed_GL_Act73 || 0,
-                  NonHome_E_Ed_GL_Act73: townProps?.NonHome_E_Ed_GL_Act73 || 0,
-                  SqMi: townProps?.SqMi || 0,
-              };
-          });
-
-          const publicSchoolsInDistrict = stats.towns.flatMap(townName => schoolDetails[townName.toUpperCase()] || []);
-          const independentSchoolsInDistrict = stats.towns.flatMap(townName => independentSchoolDetails[townName.toUpperCase()] || []);
-
-          const enrollmentHistory: { year: string; enrollment: number }[] = [];
-          const years = ['2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024']; 
-          const yearKeys: (keyof TownProperties)[] = ['Y15', 'Y16', 'Y17', 'Y18', 'Y19', 'Y20', 'Y21', 'Y22', 'Y23', 'Public_School_Students'];
-          const yearlyTotals: { [year: string]: number } = {};
-
-          stats.towns.forEach(townName => {
-              const townProps = townData[townName];
-              if (townProps) {
-                  yearKeys.forEach((key, index) => {
-                      const year = years[index];
-                      if (!yearlyTotals[year]) {
-                          yearlyTotals[year] = 0;
-                      }
-                      const enrollmentValue = townProps[key];
-                      if (typeof enrollmentValue === 'number') {
-                          yearlyTotals[year] += enrollmentValue;
-                      }
-                  });
-              }
-          });
-
-          for (const year of years) {
-              enrollmentHistory.push({ year: year, enrollment: yearlyTotals[year] || 0 });
-          }
-
-          const enrollCategory = { small: 0, medium: 0, large: 0 };
-          publicSchoolsInDistrict.forEach(school => {
-              if (school.ENROLLMENT < 150) enrollCategory.small++;
-              else if (school.ENROLLMENT < 500) enrollCategory.medium++;
-              else enrollCategory.large++;
-          });
-          
-          const independentEnrollCategory = { small: 0, medium: 0, large: 0 };
-          independentSchoolsInDistrict.forEach(school => {
-              if (school.ENROLLMENT < 150) independentEnrollCategory.small++;
-              else if (school.ENROLLMENT < 500) independentEnrollCategory.medium++;
-              else independentEnrollCategory.large++;
-          });
-
-          const pcbAboveSALCount = publicSchoolsInDistrict.filter(s => s.PCB_Cat === 'Above SAL').length;
-
-          const fciCounts = { good: 0, fair: 0, poor: 0, veryPoor: 0 };
-          publicSchoolsInDistrict.forEach(school => {
-            switch (school.fciCategory) {
-              case '<10%': fciCounts.good++; break;
-              case '10.01-30%': fciCounts.fair++; break;
-              case '30.01-65%': fciCounts.poor++; break;
-              case '>65%': fciCounts.veryPoor++; break;
-              default: break;
-            }
-          });
-
-          const { homeEEdGL, nonHomeEEdGL, totalEEdGL } = stats.towns.reduce((acc, townName) => {
-              const townProps = townData[townName];
-              acc.homeEEdGL += townProps?.Home_E_Ed_GL_Act73 || 0;
-              acc.nonHomeEEdGL += townProps?.NonHome_E_Ed_GL_Act73 || 0;
-              acc.totalEEdGL += townProps?.Total_E_Ed_GL_Act73 || 0;
-              return acc;
-          }, { homeEEdGL: 0, nonHomeEEdGL: 0, totalEEdGL: 0 });
-
-          const suStatus = { intact: [] as string[], divided: [] as string[] };
-          const rpcStatus = { intact: [] as string[], divided: [] as string[] };
-          
-          const districtSUs = [...new Set(stats.towns.map(t => townData[t].Supervisory_Union))];
-          districtSUs.forEach(su => {
-              const allTownsInSU = supervisoryUnions[su]?.towns || [];
-              const isIntact = allTownsInSU.every(t => assignments[t] === id);
-              if (isIntact) suStatus.intact.push(su); else suStatus.divided.push(su);
-          });
-          
-          const districtRPCs = [...new Set(stats.towns.map(t => townData[t].RPC))];
-          const allTownsByRPC: { [key: string]: string[] } = {};
-          Object.values(townData).forEach(t => {
-              if (!allTownsByRPC[t.RPC]) allTownsByRPC[t.RPC] = [];
-              allTownsByRPC[t.RPC].push(t.TOWNNAME);
-          });
-          
-          districtRPCs.forEach(rpc => {
-              const allTownsInRPC = allTownsByRPC[rpc] || [];
-              const isIntact = allTownsInRPC.every(t => assignments[t] === id);
-              if (isIntact) rpcStatus.intact.push(rpc); else rpcStatus.divided.push(rpc);
-          });
-
-          return {
-              id: `dist_${id}`, name: districtName, color: districtColors[id - 1], adm: stats.studentTotal,
-              grandList: stats.totalGL, homeEEdGL, nonHomeEEdGL, totalEEdGL, townCount: stats.townCount,
-              enrollmentHistory,
-              enrollCategory, independentEnrollCategory, independentSchoolCount: independentSchoolsInDistrict.length,
-              pcbAboveSALCount, fciCounts, townsWithAdm,
-              publicSchools: publicSchoolsInDistrict.map(school => ({ ...school, id: `sch_pub_${school.NAME.replace(/\s+/g, '_')}_${Math.random()}` })),
-              independentSchools: independentSchoolsInDistrict.map(school => ({ ...school, id: `sch_ind_${school.NAME.replace(/\s+/g, '_')}_${Math.random()}` })),
-              suStatus, rpcStatus,
-          };
-      })
-      .filter((d): d is ReportData => d !== null);
-    
     const unassignedTowns = Object.values(assignments).filter(d => d === null).length;
     setUnassignedTownsCount(unassignedTowns);
     setReportData(dataForReport);
