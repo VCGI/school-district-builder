@@ -81,12 +81,13 @@ This GeoJSON `FeatureCollection` provides point locations and detailed informati
 
 ## 4. High-Level Architecture
 
-The application follows a component-based architecture centered around a main `App` component.
+The application follows a component-based architecture centered around a main `App` component, which composes its state from a set of custom hooks rather than managing it inline.
 
--   **Centralized State**: All major application state is held within the `App.tsx` component.
+-   **State Ownership via Hooks**: `App.tsx` no longer holds state directly; it calls seven custom hooks under `src/hooks/` (`useDistrictBuilderData`, `useDistrictAssignments`, `useUrlStateSync`, `useMapViewState`, `useExports`, `useModals`, `useNotification`), each owning one cluster of the app's domain, and combines their return values.
 -   **Unidirectional Data Flow**: State is passed down to child components via props.
 -   **Callback Functions**: Child components communicate with the `App` component and request state changes via callback functions passed down as props (e.g., `onTownClick`, `onDistrictNameChange`).
 -   **Componentization**: The UI is broken down into logical, reusable components (`MapComponent`, `LeftSidebar`, `RightSidebar`, etc.), each with a specific responsibility.
+-   **Pure Logic Extraction**: Computation with no React dependency (URL-state encode/decode, report aggregation, report-view sorting/CSV building, school-type grouping) lives in plain, unit-tested modules (`src/urlState.ts`, `src/reportData.ts`, `src/reportView.ts`, `src/schoolGrouping.ts`) rather than inline in components.
 
 ---
 
@@ -94,15 +95,17 @@ The application follows a component-based architecture centered around a main `A
 
 #### `App.tsx`
 
-This is the most critical component, acting as the application's central controller.
+This is the most critical file, acting as the application's central controller — though it now composes state from hooks rather than owning it directly (~340 lines, down from over 1,100 before the hook decomposition).
 
 -   **State Management**:
-    -   Manages all primary state variables using `useState`, including `townData`, `assignments`, `districtNames`, `schoolDetails`, and UI state like `activeDistrict` and modal visibility.
-    -   Calculates derived data, such as `allDistrictStats`, using `useMemo` for performance optimization.
+    -   `useDistrictBuilderData` fetches and derives `townData`, `townGeoJSON`, `supervisoryUnions`, `schoolDetails`, `independentSchoolDetails`, and initial `assignments` from the S3 sources.
+    -   `useDistrictAssignments` owns `assignments`, `districtNames`, `districtOrder`, and the town/SU-click, add/delete/reorder, CSV import, and preset-geography handlers.
+    -   `useMapViewState` owns map/UI view state; `useModals` and `useNotification` own modal visibility and the toast/banner notification.
+    -   `App.tsx` itself still calculates derived data, such as `allDistrictStats` and `reportData`, using `useMemo`/`buildReportData`.
 -   **Data Fetching**:
-    -   In a `useEffect` hook, it fetches GeoJSON data for towns and school details from the URLs specified in `constants.ts`.
-    -   It processes this data to initialize the application's state.
+    -   `useDistrictBuilderData`'s mount-time `useEffect` fetches GeoJSON data for towns and school details from the URLs specified in `constants.ts` and processes it into initial state.
 -   **URL State Synchronization**:
+    -   `useUrlStateSync` wraps the pure functions in `src/urlState.ts` against live app state:
     -   `generateShareableString`: Serializes the current district assignments, district names, and map name into a compact string. It uses Run-Length Encoding (RLE) and Base62 encoding for town IDs to create a short, URL-friendly string, which is then compressed with `pako` and Base64-encoded.
     -   `loadStateFromURL`: On page load, this function checks for a `data` parameter in the URL, decodes and decompresses it, and rehydrates the application state to match the shared map.
 
@@ -163,12 +166,20 @@ The application is hosted as a **Static Web App** in **Azure Blob Storage**.
     -   **Upload the entire contents** of the local `dist` folder into the target folder within the `$web` container (e.g., `/education/district-builder/`).
     -   Ensure all files, including subdirectories, are uploaded while maintaining their structure.
 
+## 9. Testing, Linting & CI
+
+-   **Unit Tests**: [Vitest](https://vitest.dev/) reuses the existing Vite config. Run with `npm run test` (single run) or `npm run test:watch`. No `jsdom` environment is configured yet — tests cover pure logic only (`src/utils.test.ts`, `src/urlState.test.ts`, `src/reportData.test.ts`, `src/reportView.test.ts`, `src/schoolGrouping.test.ts`). Component-level tests (via `@testing-library/react`) are intentionally deferred until there's a concrete need.
+-   **Linting**: ESLint (flat config, `eslint.config.js`) with `@typescript-eslint`, `eslint-plugin-react-hooks`, and `eslint-plugin-react-refresh`. Run with `npm run lint`.
+-   **CI**: `.github/workflows/ci.yml` runs lint, test, and build on every pull request and push to `main`.
+
 ## Future Development & Refactoring
 
-While the current architecture serves the application's needs effectively, future development could benefit from refactoring a few key areas to enhance scalability and maintainability:
+The application previously centralized nearly all state and logic in `App.tsx` (~1,150 lines). That has since been refactored:
 
-* **Centralized State Management**: The main `App.tsx` component currently manages the majority of the application's state. To simplify future feature additions, a more robust state management solution could be implemented. Migrating state logic to React's Context API or a lightweight library like Zustand would reduce the need to pass props and callbacks through multiple component layers (prop drilling).
+* **State decomposed into hooks**: `App.tsx`'s state and handlers were split into seven custom hooks under `src/hooks/` (`useDistrictBuilderData`, `useDistrictAssignments`, `useUrlStateSync`, `useMapViewState`, `useExports`, `useModals`, `useNotification`), each scoped to one domain cluster. This was done with plain custom hooks rather than Context/Redux/Zustand, since prop-drilling one level to `LeftSidebar`/`RightSidebar`/`MapComponent`/`ReportComponent` doesn't warrant a state-management library at this app's size.
+* **Logic separated from rendering**: URL-state serialization (`src/urlState.ts`), report-data aggregation (`src/reportData.ts`), report-view sorting/CSV building (`src/reportView.ts`), and school-type grouping (`src/schoolGrouping.ts`) were all extracted into pure, unit-tested modules out of `App.tsx`, `ReportComponent.tsx`, and `RightSidebar.tsx`.
 
-* **Separation of Logic**: Some of the complex data manipulation (e.g., calculating district statistics, serializing data for URLs) could be extracted from the UI components and moved into dedicated custom hooks or utility functions. This would make the components themselves simpler and purely focused on presenting the user interface, improving testability and readability.
+Remaining opportunities:
 
-These changes would make the codebase more modular and easier for developers to contribute to in the future.
+* **Component-level tests**: Add `@testing-library/react` and a `jsdom` Vitest environment once there are focused components worth testing directly (e.g. `RightSidebar` with mock district stats, export/share modal open/close).
+* **`LeftSidebar.tsx`**: not yet touched by the hook decomposition; still has a component (`TabButton`) recreated on every render (tracked as an `eslint-plugin-react-hooks` `static-components` warning).

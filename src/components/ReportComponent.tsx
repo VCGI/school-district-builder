@@ -2,6 +2,7 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import type { ReportData } from '../types';
+import { processReportData, sortByAdmDescending, sortByGrandListPerStudentDescending, computeMaxValues, buildReportCsv } from '../reportView';
 
 interface ReportComponentProps {
   reportData: ReportData[];
@@ -335,63 +336,13 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
         reportData && reportData.length > 0 ? reportData[0].id : null
     );
 
-    const processedData = React.useMemo(() => {
-        if (!reportData) return [];
-        return reportData.map(d => {
-            const firstValue = d.enrollmentHistory[0]?.enrollment || 0;
-            const lastValue = d.enrollmentHistory[d.enrollmentHistory.length - 1]?.enrollment || 0;
-            const enrollmentChangePercentage = firstValue > 0 ? ((lastValue - firstValue) / firstValue) * 100 : (lastValue > 0 ? 100 : 0);
-            
-            const publicSchoolTypes = (d.publicSchools || []).reduce((acc: Record<string, number>, school) => {
-                let type = school.Type || 'Other';
-                if (type === 'Middle') type = 'Middle School';
-                if (type !== 'CTE') {
-                    acc[type] = (acc[type] || 0) + 1;
-                }
-                return acc;
-            }, {});
+    const processedData = React.useMemo(() => processReportData(reportData), [reportData]);
 
-            const independentSchoolTypes = (d.independentSchools || []).reduce((acc: Record<string, number>, school) => {
-                const type = school.Type || 'Other';
-                acc[type] = (acc[type] || 0) + 1;
-                return acc;
-            }, {});
+    const sortedAdmData = React.useMemo(() => sortByAdmDescending(processedData), [processedData]);
 
-            return {
-                ...d,
-                grandListPerStudent: d.adm > 0 ? d.grandList / d.adm : 0,
-                numSchools: d.publicSchools ? d.publicSchools.length : 0,
-                enrollmentChangePercentage: enrollmentChangePercentage,
-                publicSchoolTypes,
-                independentSchoolTypes,
-            };
-        });
-    }, [reportData]);
+    const sortedGrandListPerStudentData = React.useMemo(() => sortByGrandListPerStudentDescending(processedData), [processedData]);
 
-    const sortedAdmData = React.useMemo(() => {
-        return [...processedData].sort((a, b) => b.adm - a.adm);
-    }, [processedData]);
-
-    const sortedGrandListPerStudentData = React.useMemo(() => {
-        return [...processedData].sort((a, b) => b.grandListPerStudent - a.grandListPerStudent);
-    }, [processedData]);
-    
-    const maxValues = React.useMemo(() => {
-        if (!processedData || processedData.length === 0) {
-            return { townCount: 0, adm: 0, grandListPerStudent: 0, totalEEdGL: 0, schoolType: 0 };
-        }
-        const maxSchoolType = Math.max(1, ...processedData.flatMap(d => [
-            ...Object.values(d.publicSchoolTypes),
-            ...Object.values(d.independentSchoolTypes)
-        ]));
-        return {
-            townCount: Math.max(...processedData.map(d => d.townCount)),
-            adm: Math.max(...processedData.map(d => d.adm)),
-            grandListPerStudent: Math.max(...processedData.map(d => d.grandListPerStudent)),
-            totalEEdGL: Math.max(...processedData.map(d => d.totalEEdGL)),
-            schoolType: maxSchoolType
-        };
-    }, [processedData]);
+    const maxValues = React.useMemo(() => computeMaxValues(processedData), [processedData]);
 
     const sortedTableData = React.useMemo(() => {
         let sortableItems = [...processedData];
@@ -447,38 +398,15 @@ const ReportComponent: React.FC<ReportComponentProps> = ({ reportData, onBack, u
     const fullCurrencyFormatter = (value: number) => `$${Math.round(value || 0).toLocaleString()}`;
 
     const exportReportToCsv = () => {
-      let csvContent = "District Name,ADM,10-Year Change (%),Total Eq Ed GL,Elementary Schools,Middle Schools,Secondary Schools,K-12 Schools,Independent Elementary Schools,Independent Secondary Schools,FCI <10%,FCI 10-30%,FCI 30-65%,FCI >65%,SU Intact,SU Divided,Intact SUs,Divided SUs\r\n";
-      sortedTableData.forEach(item => {
-        const row = [
-          `"${item.name}"`,
-          item.adm,
-          item.enrollmentChangePercentage.toFixed(2),
-          item.totalEEdGL,
-          item.publicSchoolTypes['Elementary'] || 0,
-          item.publicSchoolTypes['Middle School'] || 0,
-          item.publicSchoolTypes['Secondary'] || 0,
-          item.publicSchoolTypes['K-12'] || 0,
-          item.independentSchoolTypes['Elementary'] || 0,
-          item.independentSchoolTypes['Secondary'] || 0,
-          item.fciCounts.good,
-          item.fciCounts.fair,
-          item.fciCounts.poor,
-          item.fciCounts.veryPoor,
-          item.suStatus.intact.length,
-          item.suStatus.divided.length,
-          `"${item.suStatus.intact.join(', ')}"`,
-          `"${item.suStatus.divided.join(', ')}"`
-        ].join(',');
-        csvContent += row + "\r\n";
-      });
-  
+      const csvContent = buildReportCsv(sortedTableData);
+
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement("a");
       const url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
       const date = new Date().toISOString().slice(0, 10);
       const fileName = `district_report_${date}.csv`;
-      
+
       link.setAttribute("download", fileName);
       document.body.appendChild(link);
       link.click();
