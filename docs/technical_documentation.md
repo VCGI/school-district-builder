@@ -12,7 +12,7 @@ The project is built using the following:
 
 -   **Framework**: [React](https://reactjs.org/) (v18.3.1)
 -   **Language**: [TypeScript](https://www.typescriptlang.org/) (v5.4.5)
--   **Build Tool**: [Vite](https://vitejs.dev/) (v7.0.5)
+-   **Build Tool**: [Vite](https://vitejs.dev/) (v8.2.2)
 -   **Styling**: [Tailwind CSS](https://tailwindcss.com/) (v3.4.4)
 -   **Mapping**: [Leaflet](https://leafletjs.com/) (v1.9.4)
 -   **Charting**: [Recharts](https://recharts.org/) (v2.12.7)

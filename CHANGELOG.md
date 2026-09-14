@@ -1,3 +1,12 @@
+## [0.2.16] - 2026-09-14
+
+### Added
+- Added a test suite (Vitest) and lint/test/build CI checks on every PR and push to `main`.
+- Added `CLAUDE.md` documenting the app's architecture for future development.
+
+### Changed
+- Refactored `App.tsx`, extracting state and side effects into scoped custom hooks (`useDistrictBuilderData`, `useUrlStateSync`, `useMapViewState`, `useDistrictAssignments`, `useExports`, `useModals`, `useNotification`) and extracting pure logic into unit-tested modules (`urlState.ts`, `reportData.ts`, `reportView.ts`, `schoolGrouping.ts`). No user-facing behavior change.
+
 ## [0.2.15] - 2026-04-07
 - Update dependencies
 
